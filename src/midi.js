@@ -169,36 +169,6 @@ function selectNotes(notes, instrument, difficulty, ppq) {
   return result;
 }
 
-function assignPianoHands(notes) {
-  if(notes.some(note=>note.hand))return notes;
-  const byTrack=new Map();
-  for(const note of notes){
-    if(!byTrack.has(note.sourceTrackId))byTrack.set(note.sourceTrackId,[]);
-    byTrack.get(note.sourceTrackId).push(note.pitch);
-  }
-  if(byTrack.size>1){
-    const ordered=[...byTrack].map(([id,pitches])=>({id,median:[...pitches].sort((a,b)=>a-b)[Math.floor(pitches.length/2)]}))
-      .sort((a,b)=>a.median-b.median);
-    if(ordered.at(-1).median-ordered[0].median>=5){
-      const leftIds=new Set(ordered.slice(0,Math.ceil(ordered.length/2)).map(item=>item.id));
-      return notes.map(note=>({...note,hand:leftIds.has(note.sourceTrackId)?'left':'right'}));
-    }
-  }
-  // A single melody belongs to the right hand regardless of its octave.
-  const pairs=[];
-  for(let i=0;i<notes.length;i++){
-    const current=notes[i];
-    for(let j=i+1;j<notes.length&&notes[j].start-current.start<=60;j++){
-      const other=notes[j];
-      if(Math.abs(other.pitch-current.pitch)>=5)pairs.push((other.pitch+current.pitch)/2);
-    }
-  }
-  if(!pairs.length)return notes.map(note=>({...note,hand:'right'}));
-  pairs.sort((a,b)=>a-b);
-  const split=Math.max(54,Math.min(72,pairs[Math.floor(pairs.length/2)]));
-  return notes.map(note=>({...note,hand:note.pitch<split?'left':'right'}));
-}
-
 function generateVersion(source, trackIds, instrument, difficulty, title, manual = false) {
   if ((instrument !== 'auto' && !['piano','guitar','bass','drums'].includes(instrument)) || !DIFFICULTIES[difficulty])
     throw new Error('请选择有效的乐器和难度。');
@@ -235,8 +205,7 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
       start:n.start*ppq/source.sourcePpq, duration:n.duration*ppq/source.sourcePpq,
       velocity:n.velocity,hand:n.hand,sourceTrackId:track.id })))
       .sort((a,b) => a.start-b.start || a.pitch-b.pitch).slice(0,8000);
-    if(target==='piano')scaled=assignPianoHands(scaled);
-    const chosen = target==='piano' ?
+    const chosen = target==='piano' && source.inputType==='mp3' ?
       ['right','left'].flatMap(hand=>selectNotes(scaled.filter(note=>note.hand===hand),target,difficulty,ppq)) :
       selectNotes(scaled,target,difficulty,ppq);
     const unique = new Map();
@@ -289,4 +258,4 @@ function versionToMidi(version) {
   return Buffer.from(writeMidi({header:{format:tracks.length>1?1:0,numTracks:tracks.length,ticksPerBeat:version.ppq},tracks}));
 }
 
-module.exports = { analyzeMidi, generateVersion, versionToMidi, assignPianoHands, INSTRUMENTS, DIFFICULTIES, identify };
+module.exports = { analyzeMidi, generateVersion, versionToMidi, INSTRUMENTS, DIFFICULTIES, identify };

@@ -1,6 +1,6 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {analyzeMidi,generateVersion,versionToMidi,assignPianoHands}=require('../src/midi');
+const {analyzeMidi,generateVersion,versionToMidi}=require('../src/midi');
 const {versionToMusicXML}=require('../src/musicxml');
 
 const source={
@@ -56,15 +56,4 @@ test('MP3 吉他、贝斯、鼓编配均有三档可播放音符和正确谱号'
 test('缺少和弦或节拍时不给出假贝斯或鼓谱',()=>{
   assert.throws(()=>generateVersion({...source,audioAnalysis:{beats:source.audioAnalysis.beats}},[],'bass','full','测试'),/没有识别出可用和弦/);
   assert.throws(()=>generateVersion({...source,audioAnalysis:{chords:source.audioAnalysis.chords}},[],'drums','full','测试'),/没有识别出足够节拍/);
-});
-
-test('单条低音旋律仍记右手；分轨高低音按手分配',()=>{
-  assert.deepEqual(assignPianoHands([{pitch:48,start:0,duration:480,sourceTrackId:'one'}]).map(n=>n.hand),['right']);
-  const notes=assignPianoHands([
-    {pitch:67,start:0,duration:480,sourceTrackId:'upper'},
-    {pitch:72,start:480,duration:480,sourceTrackId:'upper'},
-    {pitch:50,start:0,duration:480,sourceTrackId:'lower'},
-    {pitch:52,start:480,duration:480,sourceTrackId:'lower'}
-  ]);
-  assert.deepEqual(notes.map(n=>n.hand),['right','right','left','left']);
 });

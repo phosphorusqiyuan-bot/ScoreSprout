@@ -70,7 +70,7 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
 - 暂不导出 PDF，也未制作安装包。可将 MusicXML 交给 MuseScore 等工具继续编辑或导出 PDF。
 - 只处理标准 PPQ MIDI。SMPTE 时间格式暂不支持；极长或非常复杂的文件可能需要人工整理。
-- SheetSage2 的人声与器乐结果是两条候选旋律，并非分离的音轨或完整伴奏。双手钢琴谱把器乐旋律移入左手音域，必要时移八度；它不等于原曲钢琴左手和弦伴奏。MIDI 钢琴谱按分轨与同时发声的音高分手，这仍是启发式判断，交叉声部可能需要在 MusicXML 中手动调整。
+- SheetSage2 的人声与器乐结果是两条候选旋律，并非分离的音轨或完整伴奏。MP3 双手钢琴谱把器乐旋律移入左手音域，必要时移八度；它不等于原曲钢琴左手和弦伴奏。直接导入的 MIDI 钢琴谱继续按音高分配高、低音谱表（以中央 C 为界），不自动按轨道改写左右手；跨手声部可能需要在 MusicXML 中手动调整。
 - MP3 的吉他、贝斯、鼓谱是按预测旋律、和弦与节拍生成的练习编配，**不是原曲吉他、贝斯或鼓的转写**；缺少可用和弦时不能生成贝斯谱，缺少节拍时不能生成鼓谱。模型错认和弦或节拍会影响编配。复杂混音、强伴奏或混响仍可能导致错音和漏音，实际曲目请逐条试听。转写 MIDI 使用模型给出的音符时间，谱面仍由 ScoreSprout 量化；最多处理 25 MB、10 分钟。模型一次按最长 5 分钟窗口分析，长音频、CPU 或显存较小的显卡可能耗时很长或内存不足。旧版 MP3 导入项没有保存和弦与节拍，可重新导入原 MP3 创建新版曲目。
 - 网易云音乐、B 站等链接导入和更准确的多乐器音频识别属于后续扩展方向，当前不接入。
 
@@ -140,6 +140,6 @@ The main process handles local file access; the renderer communicates through a 
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
 - PDF export and a packaged installer are not included. Open the MusicXML in MuseScore or another notation editor to refine it or export a PDF.
 - Only standard PPQ MIDI is supported. SMPTE timing is not supported, and very long or complex files may need manual cleanup.
-- SheetSage2's vocal and instrumental outputs are melody candidates, not separated stems or full accompaniment. The piano arrangement shifts the instrumental melody into the left-hand range, sometimes by an octave; it is not the recording's actual piano accompaniment. MIDI piano hand assignment uses tracks and simultaneous pitch ranges as a heuristic and may need manual editing in MusicXML.
+- SheetSage2's vocal and instrumental outputs are melody candidates, not separated stems or full accompaniment. The MP3 piano arrangement shifts the instrumental melody into the left-hand range, sometimes by an octave; it is not the recording's actual piano accompaniment. Direct MIDI imports keep the original grand-staff split at middle C rather than assigning hands by track. Cross-hand passages may need editing in MusicXML.
 - MP3 guitar, bass, and drum scores are practice arrangements from predicted melody, chords, and beats, **not transcriptions of the recording's individual instruments**. Bass needs recognizable chords; drums need recognizable beats. Prediction errors affect these arrangements. Strong accompaniment or reverb can cause wrong or missing notes; preview both tracks. MIDI retains the model's note timing; ScoreSprout quantizes the score. MP3 input is limited to 25 MB and 10 minutes. Long files, CPU inference, or small GPUs may be very slow or run out of memory. Older MP3 library entries lack saved chord and beat data; reimport the original MP3 to create a current entry.
 - Importing links from NetEase Cloud Music, Bilibili, or other sites, and more accurate multi-instrument audio recognition, remain future extensions.
