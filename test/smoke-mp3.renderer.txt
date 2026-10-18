@@ -1,0 +1,19 @@
+(async()=>{
+  await importMp3();
+  const source=state.source;
+  if(!source||source.inputType!=='mp3'||source.tracks.length!==1)throw Error('MP3 import failed');
+  const track=source.tracks[0];
+  if(track.detected!=='unknown'||track.noteCount<1)throw Error('transcription missing or mislabeled');
+  const preview=await window.scoresprout.previewTrack(source.id,track.id);
+  if(!preview.notes.some(note=>note.pitch===69&&note.duration>=480*4))
+    throw Error('440 Hz sustained note was not transcribed correctly');
+  const assign=document.querySelector('.track-assign');
+  assign.value='piano';assign.dispatchEvent(new Event('change',{bubbles:true}));
+  if(state.assignments[track.id]!=='piano')throw Error('manual instrument assignment failed');
+  const rawMidi=await window.scoresprout.exportSourceMidi(source.id);
+  state.difficulty='full';
+  await generate();
+  if(!$('score').querySelector('svg')||!state.entry)throw Error('transcribed score did not render');
+  const versionMidi=await window.scoresprout.exportVersion(source.id,state.entry.id,'mid');
+  return {songId:source.id,notes:track.noteCount,rawMidi,versionMidi,variantId:state.entry.id,rendered:true};
+})()

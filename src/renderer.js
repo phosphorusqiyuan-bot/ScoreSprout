@@ -55,7 +55,8 @@ function renderTracks() {
     if (t.detected==='unknown') {
       const assign=document.createElement('select'); assign.className='track-assign';
       assign.setAttribute('aria-label',`指定${t.name}的乐器`);
-      for (const [value,label] of [['','指定乐器'],...instruments.map(id=>[id,names[id]])]) {
+      const choices=state.source.inputType==='mp3'?instruments.filter(id=>id!=='drums'):instruments;
+      for (const [value,label] of [['','指定乐器'],...choices.map(id=>[id,names[id]])]) {
         const option=document.createElement('option'); option.value=value; option.textContent=label; assign.append(option);
       }
       assign.value=state.assignments[t.id]||'';
@@ -81,8 +82,12 @@ function showSource(source) {
   state.trackIds=source.tracks.length?[source.tracks[0].id]:[]; state.assignments={}; resetPreviewButtons();
   $('emptyState').classList.add('hidden'); $('workspace').classList.remove('hidden'); $('result').classList.add('hidden');
   $('songTitle').value=source.title; $('pageTitle').textContent=source.title;
-  $('pageSubtitle').textContent='选择轨道和难度，生成适合自己的乐谱。';
-  $('tempoValue').textContent=`${source.bpm} BPM`; $('timeValue').textContent=source.timeSignature.join('/');
+  $('pageSubtitle').textContent=source.inputType==='mp3' ?
+    '已从 MP3 估计音符。请试听轨道，指定乐器，再选择难度。' :
+    '选择轨道和难度，生成适合自己的乐谱。';
+  $('tempoValue').textContent=`${source.bpm} BPM${source.inputType==='mp3'?'（估）':''}`;
+  $('timeValue').textContent=source.timeSignature.join('/');
+  $('exportTranscribedMidi').classList.toggle('hidden',source.inputType!=='mp3');
   const key=source.keyFifths, namesByFifths=source.keyMode?
     ['A♭','E♭','B♭','F','C','G','D','A','E','B','F♯','C♯','G♯','D♯','A♯']:
     ['C♭','G♭','D♭','A♭','E♭','B♭','F','C','G','D','A','E','B','F♯','C♯'];
@@ -176,6 +181,22 @@ async function importMidi() {
   if (!source) return;
   showSource(source); await refreshLibrary();
 }
+async function importMp3() {
+  const buttons=[$('importMp3Btn'),$('emptyImportMp3Btn')];
+  buttons.forEach(button=>button.disabled=true);
+  try {
+    const picked=await window.scoresprout.selectAudio();
+    if(!picked)return;
+    if(picked.existing){showSource(picked.source);await refreshLibrary();return;}
+    if(!window.ScoreTranscriber)throw new Error('音频转写组件未加载。');
+    notice('正在解码 MP3…');
+    const output=await window.ScoreTranscriber.transcribeMp3(picked.bytes,
+      progress=>notice(`正在转写音符… ${Math.round(progress*100)}%`));
+    const source=await window.scoresprout.saveTranscription(picked.token,output.notes);
+    showSource(source);await refreshLibrary();
+    notice(`已从 MP3 转写 ${output.notes.length} 个音符。请试听后指定乐器；复杂混音可能需要人工修正。`,'success');
+  } finally {buttons.forEach(button=>button.disabled=false);}
+}
 async function generate() {
   if (!state.source) return;
   if (!state.trackIds.length) throw new Error('请先选择至少一个有音符的轨道。');
@@ -210,6 +231,13 @@ async function preview(id) {
 function bind() {
   $('importBtn').addEventListener('click',()=>guarded(importMidi));
   $('emptyImportBtn').addEventListener('click',()=>guarded(importMidi));
+  $('importMp3Btn').addEventListener('click',()=>guarded(importMp3));
+  $('emptyImportMp3Btn').addEventListener('click',()=>guarded(importMp3));
+  $('exportTranscribedMidi').addEventListener('click',()=>guarded(async()=>{
+    if(!state.source||state.source.inputType!=='mp3')return;
+    const file=await window.scoresprout.exportSourceMidi(state.source.id);
+    if(file)notice(`已导出转写 MIDI：${file}`,'success');
+  }));
   $('generateBtn').addEventListener('click',()=>guarded(generate));
   $('deleteScore').addEventListener('click',()=>requestDelete(state.entry));
   $('cancelDelete').addEventListener('click',()=>{if(!state.deleting)$('deleteDialog').close();});

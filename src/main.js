@@ -5,9 +5,11 @@ const crypto = require('node:crypto');
 const { analyzeMidi, generateVersion, versionToMidi, INSTRUMENTS, DIFFICULTIES } = require('./midi');
 const { versionToMusicXML } = require('./musicxml');
 const { deleteVersion } = require('./library');
+const { transcribedNotesToMidi } = require('./audio-import');
 const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
 
 let libraryRoot;
+let pendingAudio=null;
 if (process.env.SCORESPROUT_TEST_DATA) {
   fs.mkdirSync(process.env.SCORESPROUT_TEST_DATA,{recursive:true});
   app.setPath('userData',path.resolve(process.env.SCORESPROUT_TEST_DATA));
@@ -22,6 +24,10 @@ function ensureSource(id) {
   const manifest = readManifest(id);
   const source = analyzeMidi(fs.readFileSync(path.join(songDir(id), 'original.mid')), manifest.filename);
   source.title = manifest.title;
+  if(manifest.sourceType==='mp3'){
+    source.inputType='mp3';
+    source.warnings.unshift('MP3 转写只估计音高与节奏，不能识别原曲中的乐器或分离鼓声。请试听并手动指定乐器。速度暂按 120 BPM 记谱。');
+  }
   return { manifest, source };
 }
 function wrap(handler) { return async (_event,...args) => { try { return { ok:true, data:await handler(...args) }; } catch (e) { return { ok:false, error:e.message || String(e) }; } }; }
@@ -43,7 +49,58 @@ app.whenReady().then(() => {
     writeJSON(manifestPath(id),manifest);
     return { id, ...summary({ ...source, title:manifest.title }) };
   }));
+  ipcMain.handle('select-audio', wrap(async () => {
+    pendingAudio=null;
+    const picked=process.env.SCORESPROUT_TEST_IMPORT_MP3 ?
+      {canceled:false,filePaths:[process.env.SCORESPROUT_TEST_IMPORT_MP3]} :
+      await dialog.showOpenDialog({title:'导入 MP3 并转写音符',properties:['openFile'],filters:[{name:'MP3 音频',extensions:['mp3']}]});
+    if(picked.canceled||!picked.filePaths[0])return null;
+    const file=picked.filePaths[0];
+    if(path.extname(file).toLowerCase()!=='.mp3')throw new Error('请选择 .mp3 文件。');
+    const size=fs.statSync(file).size;
+    if(size>25*1024*1024)throw new Error('MP3 超过 25 MB，请先压缩或裁剪。');
+    if(size<100)throw new Error('MP3 文件为空或已损坏。');
+    const bytes=fs.readFileSync(file),id=crypto.createHash('sha256').update(bytes).digest('hex').slice(0,24);
+    if(fs.existsSync(manifestPath(id))){
+      const {manifest,source}=ensureSource(id);
+      if(manifest.sourceType==='mp3')return {existing:true,source:{id,...summary(source)}};
+    }
+    const token=crypto.randomUUID();
+    pendingAudio={token,id,filename:path.basename(file),bytes};
+    return {token,filename:path.basename(file),bytes:Uint8Array.from(bytes)};
+  }));
+  ipcMain.handle('save-transcription', wrap((token,notes) => {
+    if(!pendingAudio||pendingAudio.token!==token)throw new Error('MP3 导入已过期，请重新选择文件。');
+    const {id,filename,bytes}=pendingAudio;
+    const midi=transcribedNotesToMidi(notes);
+    const source=analyzeMidi(midi,`${path.parse(filename).name}.mid`);
+    if(!source.tracks.length)throw new Error('转写结果没有可用音符。');
+    const dir=songDir(id);
+    fs.mkdirSync(dir,{recursive:true});
+    fs.writeFileSync(path.join(dir,'original.mp3'),bytes);
+    fs.writeFileSync(path.join(dir,'original.mid'),midi);
+    const manifest={id,title:path.parse(filename).name||'未命名音频',
+      filename:`${path.parse(filename).name}.mid`,audioFilename:filename,sourceType:'mp3',
+      createdAt:new Date().toISOString(),variants:[]};
+    writeJSON(manifestPath(id),manifest);
+    pendingAudio=null;
+    source.title=manifest.title;source.inputType='mp3';
+    source.warnings.unshift('MP3 转写只估计音高与节奏，不能识别原曲中的乐器或分离鼓声。请试听并手动指定乐器。速度暂按 120 BPM 记谱。');
+    return {id,...summary(source)};
+  }));
   ipcMain.handle('get-source', wrap(id => { const {source} = ensureSource(id); return {id,...summary(source)}; }));
+  ipcMain.handle('export-source-midi', wrap(async id => {
+    const {manifest}=ensureSource(id);
+    if(manifest.sourceType!=='mp3')throw new Error('只有 MP3 转写结果可在这里直接导出。');
+    const defaultPath=`${manifest.title} - 音频转写.mid`.replace(/[\\/:*?"<>|]/g,'_');
+    const chosen=process.env.SCORESPROUT_TEST_EXPORT ?
+      {canceled:false,filePath:path.join(process.env.SCORESPROUT_TEST_EXPORT,defaultPath)} :
+      await dialog.showSaveDialog({title:'导出转写 MIDI',defaultPath,filters:[{name:'MIDI',extensions:['mid']}]});
+    if(chosen.canceled||!chosen.filePath)return null;
+    if(process.env.SCORESPROUT_TEST_EXPORT)fs.mkdirSync(process.env.SCORESPROUT_TEST_EXPORT,{recursive:true});
+    fs.copyFileSync(path.join(songDir(id),'original.mid'),chosen.filePath);
+    return chosen.filePath;
+  }));
   ipcMain.handle('rename-song', wrap((id,title) => {
     const m = readManifest(id), nextTitle=String(title || '').trim().slice(0,120) || m.title;
     if(nextTitle===m.title) return m.title;

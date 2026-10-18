@@ -186,6 +186,8 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
     } else if (instrument !== 'auto' && target !== instrument) {
       throw new Error(`轨道「${track.name}」已识别为${INSTRUMENTS[target]}，不能作为${INSTRUMENTS[instrument]}生成乐谱。`);
     }
+    if(source.inputType==='mp3'&&target==='drums')
+      throw new Error('MP3 转写无法可靠识别鼓声，不能将其音高作为鼓谱。');
     if (!groups.has(target)) groups.set(target, []);
     groups.get(target).push(track);
   }

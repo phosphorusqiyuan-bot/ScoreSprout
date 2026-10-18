@@ -1,0 +1,9 @@
+(async()=>{
+  const library=await window.scoresprout.listLibrary();
+  const item=library.find(v=>v.title==='440hz-test'&&v.instrument==='piano');
+  if(!item)throw Error('MP3 score missing after restart');
+  await openLibrary(item);
+  if(state.source.inputType!=='mp3'||!$('score').querySelector('svg'))throw Error('MP3 source did not reopen');
+  if($('exportTranscribedMidi').classList.contains('hidden'))throw Error('converted MIDI export missing');
+  return {songId:item.songId,persisted:true,rendered:true};
+})()

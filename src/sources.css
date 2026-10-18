@@ -35,6 +35,10 @@
 .track-assign { flex: none; max-width: 110px; padding: 7px 8px; }
 .selection-row { gap: 12px; align-items: center; flex-wrap: wrap; }
 .selection-row strong { color: #356e43; }
+.audio-import-button { margin-top: 9px; background: #233b2c; color: #d9eedd; border-color: #426049; }
+.audio-import-button:hover { background: #31513b; }
+.empty-mp3 { margin-left: 9px; }
+.selection-row #exportTranscribedMidi { margin-left: auto; }
 
 .library-row { display: flex; align-items: center; gap: 3px; }
 .library-row .library-item { flex: 1; min-width: 0; }
