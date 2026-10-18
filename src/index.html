@@ -5,7 +5,7 @@
     <button id="importBtn" class="primary wide">＋ 导入 MIDI 文件</button>
     <div class="side-heading"><h3>本地音乐库</h3><span id="libraryCount">0</span></div>
     <input id="search" type="search" placeholder="搜索歌曲名…">
-    <div class="filters"><select id="filterInstrument"><option value="">所有乐器</option><option value="piano">钢琴</option><option value="guitar">吉他</option><option value="drums">鼓</option><option value="bass">贝斯</option></select><select id="filterDifficulty"><option value="">所有难度</option><option value="beginner">新手版</option><option value="intermediate">进阶版</option><option value="full">完整版</option></select></div>
+    <div class="filters"><select id="filterInstrument"><option value="">所有乐器</option><option value="piano">钢琴</option><option value="guitar">吉他</option><option value="drums">鼓</option><option value="bass">贝斯</option><option value="ensemble">合奏</option></select><select id="filterDifficulty"><option value="">所有难度</option><option value="beginner">新手版</option><option value="intermediate">进阶版</option><option value="full">完整版</option></select></div>
     <div id="libraryList" class="library-list"></div>
     <div class="side-footer">文件与乐谱仅保存在这台电脑</div>
   </aside>
@@ -17,8 +17,8 @@
       <section class="setup card"><div class="section-title"><div><span class="step">01</span><h2>选择要演奏的部分</h2></div><span id="sourceMeta" class="muted"></span></div>
         <label class="field song-field">歌曲名 <input id="songTitle" maxlength="120" placeholder="歌曲名"></label>
         <div class="meta-grid"><div><small>速度</small><strong id="tempoValue">—</strong></div><div><small>拍号</small><strong id="timeValue">—</strong></div><div><small>调号</small><strong id="keyValue">—</strong></div><div><small>轨道</small><strong id="trackCount">—</strong></div></div>
-        <div class="field-label">选择轨道 <span>可先试听，不明确的轨道可以手动指定乐器</span></div><div id="trackList" class="track-list"></div>
-        <div class="control-row"><label class="field">目标乐器<select id="instrument"><option value="piano">钢琴</option><option value="guitar">吉他</option><option value="drums">鼓</option><option value="bass">贝斯</option></select></label><label class="manual"><input id="manualAssign" type="checkbox"> 手动指定此轨道为所选乐器</label><button id="previewBtn" class="ghost">▶ 试听轨道</button></div>
+        <div class="field-label">选择轨道（可多选） <span>每个轨道都能单独试听；未识别的轨道请手动指定乐器</span></div><div id="trackList" class="track-list"></div>
+        <div class="control-row selection-row"><strong id="selectionSummary">已选 0 个轨道</strong><span class="muted">同乐器合并为一个声部，不同乐器组成合奏谱。</span></div>
       </section>
       <section class="difficulty card"><div class="section-title"><div><span class="step">02</span><h2>选择演奏难度</h2></div></div><div class="difficulty-grid"><button data-difficulty="beginner" class="difficulty-option active"><b>新手版</b><span>少量音符 · 简单节拍 · 舒适音域</span></button><button data-difficulty="intermediate" class="difficulty-option"><b>进阶版</b><span>保留旋律与关键节奏</span></button><button data-difficulty="full" class="difficulty-option"><b>完整版</b><span>尽量保留原始轨道</span></button></div><button id="generateBtn" class="primary generate">生成乐谱 <span>→</span></button></section>
       <section id="result" class="result card hidden"><div class="section-title"><div><span class="step">03</span><h2 id="resultTitle">生成的乐谱</h2><p id="resultDetails" class="muted"></p></div><div class="export-actions"><button id="exportXml" class="ghost">导出 MusicXML</button><button id="exportMidi" class="ghost">导出 MIDI</button></div></div>

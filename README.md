@@ -4,7 +4,7 @@
 
 ## 简体中文
 
-ScoreSprout 是一款优先面向 Windows 的本地 MIDI 乐谱桌面软件。导入 `.mid` / `.midi` 后，选择真实存在的轨道、乐器和难度，即可查看五线谱、试听生成版本，并在本机音乐库保存或导出 MusicXML / MIDI。
+ScoreSprout 是一款优先面向 Windows 的本地 MIDI 乐谱桌面软件。导入 `.mid` / `.midi` 后，可选择一条或多条真实存在的轨道及难度，查看五线谱、试听生成版本，并在本机音乐库保存或导出 MusicXML / MIDI。同乐器轨道合并为一个声部；不同乐器轨道生成合奏谱。
 
 ## 安装与启动
 
@@ -29,16 +29,16 @@ corepack pnpm start
 ## 使用
 
 1. 点击「导入 MIDI 文件」。文件会复制到本地音乐库，原文件不会被修改。
-2. 查看速度、拍号、调号和轨道列表，修改歌曲名。选择一个有音符的轨道；不明乐器的轨道可试听后手动指定。
+2. 查看速度、拍号、调号和轨道列表，修改歌曲名。勾选一条或多条有音符的轨道；每条轨道都可单独试听，未识别的轨道需手动指定乐器。
 3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。已识别的乐器轨道不能冒充另一种乐器。
-4. 在结果区域播放、暂停、停止或拖动进度。MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
+4. 在结果区域播放、暂停、停止或拖动进度。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
 5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。再次选择难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
 
 音乐库保存在 Electron 的 `userData/library` 目录，Windows 通常是 `%APPDATA%\scoresprout\library`。每首歌保存 `original.mid` 和 `manifest.json`；每个生成版本保存 JSON、`.musicxml`、`.mid`。无需账号或云服务。
 
 ## 示例和验证
 
-仓库的 `samples/` 包含钢琴、吉他、贝斯、鼓、四乐器合奏、无速度信息、单轨多乐器等 7 个 MIDI。它们可以随时重新生成：
+仓库的 `samples/` 包含钢琴、吉他、贝斯、鼓、四乐器合奏、无速度信息、单轨多乐器，以及分轨钢琴加延音踏板，共 8 个 MIDI。它们可以随时重新生成：
 
 ```powershell
 corepack pnpm samples
@@ -46,7 +46,7 @@ corepack pnpm test
 corepack pnpm smoke
 ```
 
-`smoke` 会启动真正的 Electron 应用两次：首次导入四乐器示例，为每种乐器生成三档谱并渲染、导出；第二次检查音乐库持久化及播放、暂停、停止、进度跳转。结果和导出文件位于项目下自动创建的 `.smoke-*` 目录。
+`smoke` 会启动真正的 Electron 应用两次：首次导入四乐器示例，为每种乐器生成三档谱，并生成一份多轨合奏谱，逐一渲染、导出；第二次检查音乐库持久化、合奏重开及播放、暂停、停止、进度跳转。结果和导出文件位于项目下自动创建的 `.smoke-*` 目录。
 
 ## 技术选择
 
@@ -60,7 +60,7 @@ corepack pnpm smoke
 ## 第一版的明确限制
 
 - 生成谱统一使用文件开头的速度和拍号；多次速度或拍号变化会提示。没有速度信息时用 120 BPM。
-- 节奏量化到十六分音符（完整版）、八分音符（进阶版）或四分音符（新手版）；复杂连音、摇摆节奏、踏板、表情与力度细节尚不能完整记谱。完整版仍可能因量化而与原 MIDI 的微小时间偏差不同。
+- 节奏量化到十六分音符（完整版）、八分音符（进阶版）或四分音符（新手版）；复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱。延音踏板会延长音符时值，但谱面不显示踏板符号。完整版仍可能因量化而与原 MIDI 的微小时间偏差不同。
 - 简化是可重复的规则处理，不保证所有曲目仍有理想的音乐表现。吉他使用高音谱表，暂不生成六线谱或指法；鼓谱支持常见鼓组映射，罕见打击乐音高可能使用通用位置。
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
 - 暂不导出 PDF，也未制作安装包。可将 MusicXML 交给 MuseScore 等工具继续编辑或导出 PDF。
@@ -69,7 +69,7 @@ corepack pnpm smoke
 
 ## English
 
-ScoreSprout is a local desktop app, built with Windows in mind, that turns MIDI tracks into sheet music at a level you can play. Import a `.mid` or `.midi` file, choose a track, instrument, and difficulty, then read and play the generated score. Save it in the local library or export MusicXML and MIDI.
+ScoreSprout is a local desktop app, built with Windows in mind, that turns MIDI tracks into sheet music at a level you can play. Import a `.mid` or `.midi` file, choose one or more tracks and a difficulty, then read and play the generated score. Tracks of the same instrument merge into one part; tracks of different instruments form an ensemble score. Save it in the local library or export MusicXML and MIDI.
 
 ### Install and run
 
@@ -92,16 +92,16 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 ### Use
 
 1. Click **导入 MIDI 文件** (Import MIDI file). The app copies the file to its local library without changing the original.
-2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. Select a track with notes; you can preview an unidentified track and assign its instrument manually.
+2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. Select one or more tracks with notes. Each track has its own preview; assign the instrument of any unidentified track manually.
 3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). A recognized instrument track cannot be relabeled as another instrument.
-4. Play, pause, stop, or seek through the result. The score, playback, and exported MIDI are derived from the same generated note data.
+4. Play, pause, stop, or seek through the result. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
 5. Reopen saved versions from the local library, or filter by song, instrument, and difficulty. Generate another difficulty to save another version. Different instruments of the same song have separate internal IDs.
 
 The library lives in Electron's `userData/library` directory, usually `%APPDATA%\scoresprout\library` on Windows. Each song stores `original.mid` and `manifest.json`; each arrangement stores JSON, `.musicxml`, and `.mid` files. No account or cloud service is required.
 
 ### Samples and verification
 
-The `samples/` directory contains seven MIDI files: piano, guitar, bass, drums, a four-instrument ensemble, a file without tempo data, and a mixed-instrument single track. Regenerate the samples and run the checks with:
+The `samples/` directory contains eight MIDI files: piano, guitar, bass, drums, a four-instrument ensemble, a file without tempo data, a mixed-instrument single track, and a split piano with sustain pedal. Regenerate the samples and run the checks with:
 
 ```powershell
 corepack pnpm samples
@@ -109,7 +109,7 @@ corepack pnpm test
 corepack pnpm smoke
 ```
 
-The smoke test launches the Electron app twice. It imports the ensemble, generates and renders all three difficulty levels for all four instruments, and exports them. On the second launch, it checks library persistence and the play, pause, stop, and seek controls. Outputs are written to a `.smoke-*` directory in the project.
+The smoke test launches the Electron app twice. It imports the ensemble, generates and renders all three difficulty levels for all four instruments plus one multi-track ensemble, and exports them. On the second launch, it checks library persistence, ensemble reopening, and the play, pause, stop, and seek controls. Outputs are written to a `.smoke-*` directory in the project.
 
 ### Technology
 
@@ -123,7 +123,7 @@ The main process handles local file access; the renderer communicates through a 
 ### Known limits of the first release
 
 - The score uses the tempo and time signature at the beginning of the file. The app warns about later changes and assumes 120 BPM when tempo is missing.
-- Rhythm is quantized to sixteenth notes (Full), eighth notes (Intermediate), or quarter notes (Beginner). Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Even the Full version may differ slightly from the original MIDI timing.
+- Rhythm is quantized to sixteenth notes (Full), eighth notes (Intermediate), or quarter notes (Beginner). Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown on the score. Even the Full version may differ slightly from the original MIDI timing.
 - Simplification is deterministic and may need manual musical editing. Guitar uses a treble staff, without tablature or fingering. Drum notation maps common kit sounds; unusual percussion may use a generic position.
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
 - PDF export and a packaged installer are not included. Open the MusicXML in MuseScore or another notation editor to refine it or export a PDF.

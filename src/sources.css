@@ -29,6 +29,13 @@
   text-decoration: underline;
 }
 
+.track-body { min-width: 0; flex: 1; }
+.track-title { display: block; font-weight: 700; cursor: pointer; }
+.track-preview { flex: none; white-space: nowrap; padding: 7px 10px; }
+.track-assign { flex: none; max-width: 110px; padding: 7px 8px; }
+.selection-row { gap: 12px; align-items: center; flex-wrap: wrap; }
+.selection-row strong { color: #356e43; }
+
 @media (max-width: 1100px) {
   .topbar { flex-wrap: wrap; gap: 18px; }
   .midi-sources { width: 100%; max-width: none; margin-left: 0; }

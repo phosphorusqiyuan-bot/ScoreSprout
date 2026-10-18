@@ -1,6 +1,11 @@
 (async()=>{
   const source=await window.scoresprout.importMidi(), outcomes=[];
   if(source.tracks.length!==4)throw Error(`expected 4 tracks, got ${source.tracks.length}`);
+  showSource(source);
+  const choices=[...document.querySelectorAll('#trackList input[type="checkbox"]')];
+  if(choices.length!==4||state.trackIds.length!==1)throw Error('multi-track choices missing');
+  for(const choice of choices.slice(1)){choice.checked=true;choice.dispatchEvent(new Event('change',{bubbles:true}));}
+  if(state.trackIds.length!==4||!$('selectionSummary').textContent.includes('合奏'))throw Error('multi-track selection failed');
   for(const track of source.tracks){
     const preview=await window.scoresprout.previewTrack(source.id,track.id);
     if(!preview.notes.length)throw Error('empty preview');
@@ -15,6 +20,16 @@
       outcomes.push({instrument:track.detected,difficulty,notes:generated.version.notes.length,svg:true,midi,xml});holder.remove();
     }
   }
+  const generated=await window.scoresprout.generate(source.id,state.trackIds,'full',source.title,{});
+  if(generated.version.instrument!=='ensemble'||generated.version.parts.length!==4)throw Error('ensemble generation failed');
+  const holder=document.createElement('div');holder.style.width='1100px';document.body.append(holder);
+  const osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay(holder,{backend:'svg',autoResize:false,drawTitle:false,drawPartNames:true});
+  await osmd.load(generated.musicxml);osmd.render();
+  if(!holder.querySelector('svg'))throw Error('ensemble score did not render');
+  const midi=await window.scoresprout.exportVersion(source.id,generated.id,'mid');
+  const xml=await window.scoresprout.exportVersion(source.id,generated.id,'musicxml');
+  outcomes.push({instrument:'ensemble',difficulty:'full',notes:generated.version.notes.length,svg:true,midi,xml});
+  holder.remove();
   await window.scoresprout.renameSong(source.id,'ScoreSprout 重命名测试');
   const library=await window.scoresprout.listLibrary();
   if(library.some(v=>v.title!=='ScoreSprout 重命名测试'))throw Error('rename did not update library');

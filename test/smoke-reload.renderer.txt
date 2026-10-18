@@ -1,6 +1,8 @@
 (async()=>{
   const library=await window.scoresprout.listLibrary();
-  if(library.length!==12)throw Error(`library missing versions: ${library.length}`);
+  if(library.length!==13)throw Error(`library missing versions: ${library.length}`);
+  const ensemble=library.find(v=>v.instrument==='ensemble');
+  if(!ensemble||ensemble.trackIds.length!==4)throw Error('ensemble selection did not persist');
   const item=library.find(v=>v.instrument==='piano'&&v.difficulty==='full');if(!item)throw Error('piano version missing');await openLibrary(item);
   if($('resultTitle').textContent!=='ScoreSprout 重命名测试 · 完整版')throw Error('renamed title did not persist in version');
   if(!$('score').querySelector('svg'))throw Error('saved score did not render');
@@ -11,5 +13,7 @@
   p.pause();if(p.playing||p.position<=0)throw Error(`pause failed: position=${p.position} ctx=${p.ctx.currentTime} base=${p.base} state=${p.ctx.state} duration=${p.duration}`);
   p.seek(p.duration/2);if(Math.abs(p.position-p.duration/2)>.01)throw Error('seek failed');
   await p.play();p.stop();if(p.position!==0||p.playing)throw Error('stop failed');
-  return {library:library.length,loaded:item.id,svg:true,playbackControls:true};
+  await openLibrary(ensemble);
+  if(state.trackIds.length!==4||!$('score').querySelector('svg'))throw Error('ensemble did not reopen');
+  return {library:library.length,loaded:item.id,svg:true,playbackControls:true,ensemble:true};
 })()

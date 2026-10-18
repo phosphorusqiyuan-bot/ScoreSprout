@@ -14,8 +14,8 @@ for(const stage of ['create','reload']){
 }
 const created=JSON.parse(fs.readFileSync(path.join(data,'smoke-create.json'),'utf8'));
 const loaded=JSON.parse(fs.readFileSync(path.join(data,'smoke-reload.json'),'utf8'));
-if(created.outcomes.length!==12||created.library!==12||loaded.library!==12||!loaded.svg||!loaded.playbackControls)
+if(created.outcomes.length!==13||created.library!==13||loaded.library!==13||!loaded.svg||!loaded.playbackControls||!loaded.ensemble)
   throw Error('验收结果不完整。');
-const files=fs.readdirSync(exportDir);if(files.filter(f=>f.endsWith('.mid')).length!==12||files.filter(f=>f.endsWith('.musicxml')).length!==12)
+const files=fs.readdirSync(exportDir);if(files.filter(f=>f.endsWith('.mid')).length!==13||files.filter(f=>f.endsWith('.musicxml')).length!==13)
   throw Error('导出数量不正确。');
-console.log(`验收通过：12 个版本、12 份谱面、24 个导出文件、重启读取、播放控制。\n结果目录：${runRoot}`);
+console.log(`验收通过：13 个版本、13 份谱面、26 个导出文件、合奏、重启读取、播放控制。\n结果目录：${runRoot}`);

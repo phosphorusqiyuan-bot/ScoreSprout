@@ -1,10 +1,11 @@
 const fs=require('node:fs');const path=require('node:path');const {writeMidi}=require('midi-file');
 const dir=path.join(__dirname,'..','samples');fs.mkdirSync(dir,{recursive:true});
-function makeTrack(name,program,channel,notes,meta=false) {
+function makeTrack(name,program,channel,notes,meta=false,pedalEvents=[]) {
   const events=[{tick:0,order:0,type:'trackName',text:Buffer.from(name,'utf8').toString('latin1')}];
   if(meta) events.push({tick:0,order:0,type:'setTempo',microsecondsPerBeat:500000},{tick:0,order:0,type:'timeSignature',numerator:4,denominator:4,metronome:24,thirtyseconds:8},{tick:0,order:0,type:'keySignature',key:0,scale:0});
   if(channel!==9)events.push({tick:0,order:0,type:'programChange',channel,programNumber:program});
   for(const [start,duration,pitch,velocity=85] of notes){events.push({tick:start,order:2,type:'noteOn',channel,noteNumber:pitch,velocity},{tick:start+duration,order:1,type:'noteOff',channel,noteNumber:pitch,velocity:0});}
+  for(const [tick,value] of pedalEvents)events.push({tick,order:0,type:'controller',channel,controllerType:64,value});
   events.sort((a,b)=>a.tick-b.tick||a.order-b.order);let tick=0;
   const track=events.map(({tick:t,order,...rest})=>{const e={deltaTime:t-tick,...rest};tick=t;return e;});track.push({deltaTime:0,type:'endOfTrack'});return track;
 }
@@ -24,6 +25,11 @@ save('bass.mid',[makeTrack('Bass demo',33,2,bass,true)]);
 save('drums.mid',[makeTrack('Drum demo',0,9,drums,true)]);
 save('four-instruments.mid',[makeTrack('ScoreSprout 示例',0,0,[],true),makeTrack('Piano',0,0,piano),makeTrack('Guitar',24,1,guitar),makeTrack('Bass',33,2,bass),makeTrack('Drums',0,9,drums)]);
 save('no-tempo.mid',[makeTrack('无速度示例',0,0,piano)]);
+// 右手的短键盘按压由延音踏板保持，左手来自另一个钢琴轨道。
+save('sustain-and-split-piano.mid',[
+  makeTrack('右手旋律',0,0,[[0,120,60],[480,120,62],[960,120,64]],true,[[0,127],[1440,0]]),
+  makeTrack('左手伴奏',0,1,[[0,960,48],[960,960,53]])
+]);
 // 单轨中两个通道使用不同乐器，验证拆分识别。
 const mixed=makeTrack('Mixed',0,0,piano,true).filter(e=>e.type!=='endOfTrack');let abs=0;const a=mixed.map(e=>{abs+=e.deltaTime;return {tick:abs,...e}});
 for(const e of makeTrack('Bass',33,2,bass)){if(e.type==='endOfTrack'||e.type==='trackName')continue;}

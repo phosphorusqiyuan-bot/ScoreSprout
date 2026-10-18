@@ -46,17 +46,15 @@ function notesXML(pieces, staff, voice, instrument, flats) {
   }).join('');
 }
 
-function versionToMusicXML(version) {
-  const [num, den] = version.timeSignature, measureTicks = version.ppq * 4 * num / den;
-  if (!Number.isInteger(measureTicks) || measureTicks % 120) throw new Error('此拍号无法用第一版的十六分音符网格记谱。');
-  const lastTick = Math.max(...version.notes.map(n => n.start+n.duration));
-  const measureCount = Math.max(1, Math.ceil(lastTick / measureTicks));
+function renderPart(version, part, measureCount, measureTicks, partId) {
+  const [num, den] = version.timeSignature;
+  version = { ...version, instrument:part.instrument, notes:part.notes };
   const isPiano = version.instrument === 'piano', isDrums = version.instrument === 'drums';
   const name = { piano:'钢琴',guitar:'吉他',bass:'贝斯',drums:'鼓' }[version.instrument];
   const clef = isDrums ? '<sign>percussion</sign>' : version.instrument === 'bass' ? '<sign>F</sign><line>4</line>' : '<sign>G</sign><line>2</line>';
   const partList = isDrums
-    ? `<score-part id="P1"><part-name>鼓</part-name>${[...new Set(version.notes.map(n=>n.pitch))].map(p=>`<score-instrument id="D${p}"><instrument-name>${xml(drumNames[p] || `打击乐 ${p}`)}</instrument-name><instrument-abbreviation>Perc</instrument-abbreviation></score-instrument><midi-instrument id="D${p}"><midi-channel>10</midi-channel><midi-unpitched>${p+1}</midi-unpitched></midi-instrument>`).join('')}</score-part>`
-    : `<score-part id="P1"><part-name>${name}</part-name><score-instrument id="I1"><instrument-name>${name}</instrument-name></score-instrument><midi-instrument id="I1"><midi-channel>1</midi-channel><midi-program>${{piano:1,guitar:25,bass:34}[version.instrument]}</midi-program></midi-instrument></score-part>`;
+    ? `<score-part id="${partId}"><part-name>鼓</part-name>${[...new Set(version.notes.map(n=>n.pitch))].map(p=>`<score-instrument id="D${p}"><instrument-name>${xml(drumNames[p] || `打击乐 ${p}`)}</instrument-name><instrument-abbreviation>Perc</instrument-abbreviation></score-instrument><midi-instrument id="D${p}"><midi-channel>10</midi-channel><midi-unpitched>${p+1}</midi-unpitched></midi-instrument>`).join('')}</score-part>`
+    : `<score-part id="${partId}"><part-name>${name}</part-name><score-instrument id="I${partId}"><instrument-name>${name}</instrument-name></score-instrument><midi-instrument id="I${partId}"><midi-channel>${{piano:1,guitar:2,bass:3}[version.instrument]}</midi-channel><midi-program>${{piano:1,guitar:25,bass:34}[version.instrument]}</midi-program></midi-instrument></score-part>`;
   const measures = [];
   for (let m = 0; m < measureCount; m++) {
     const start = m*measureTicks, end = start+measureTicks;
@@ -66,6 +64,15 @@ function versionToMusicXML(version) {
     const lowerXML = isPiano ? `<backup><duration>${measureTicks}</duration></backup>${notesXML(voicePieces(version.notes.filter(n => n.start < end && n.start+n.duration > start && n.pitch < 60),start,end),2,2,version.instrument,version.keyFifths < 0)}` : '';
     measures.push(`<measure number="${m+1}">${attributes}${upperXML}${lowerXML}</measure>`);
   }
-  return `<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE score-partwise  PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n<score-partwise version="4.0"><work><work-title>${xml(version.title)}</work-title></work><movement-title>${xml(version.title)} · ${xml({ beginner:'新手版',intermediate:'进阶版',full:'完整版' }[version.difficulty])}</movement-title><identification><creator type="software">ScoreSprout</creator></identification><defaults><scaling><millimeters>7</millimeters><tenths>40</tenths></scaling></defaults><part-list>${partList}</part-list><part id="P1">${measures.join('')}</part></score-partwise>`;
+  return { partList, body:`<part id="${partId}">${measures.join('')}</part>` };
+}
+function versionToMusicXML(version) {
+  const [num,den] = version.timeSignature, measureTicks=version.ppq*4*num/den;
+  if (!Number.isInteger(measureTicks) || measureTicks % 120) throw new Error('此拍号无法用第一版的十六分音符网格记谱。');
+  const parts = version.parts?.length ? version.parts : [{instrument:version.instrument,notes:version.notes}];
+  const lastTick = Math.max(...parts.flatMap(part=>part.notes.map(n=>n.start+n.duration)));
+  const measureCount = Math.max(1,Math.ceil(lastTick/measureTicks));
+  const rendered=parts.map((part,index)=>renderPart(version,part,measureCount,measureTicks,`P${index+1}`));
+  return `<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE score-partwise  PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n<score-partwise version="4.0"><work><work-title>${xml(version.title)}</work-title></work><movement-title>${xml(version.title)} · ${xml({ beginner:'新手版',intermediate:'进阶版',full:'完整版' }[version.difficulty])}</movement-title><identification><creator type="software">ScoreSprout</creator></identification><defaults><scaling><millimeters>7</millimeters><tenths>40</tenths></scaling></defaults><part-list>${rendered.map(x=>x.partList).join('')}</part-list>${rendered.map(x=>x.body).join('')}</score-partwise>`;
 }
 module.exports = { versionToMusicXML };

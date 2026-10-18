@@ -63,16 +63,24 @@ app.whenReady().then(() => {
     if (!track) throw new Error('轨道不存在。');
     return { bpm:source.bpm, instrument:track.detected, notes:track.notes.map(n=>({ ...n,start:n.start*480/source.sourcePpq,duration:n.duration*480/source.sourcePpq })).slice(0,1500) };
   }));
-  ipcMain.handle('generate-version', wrap((id,trackId,instrument,difficulty,title,manual) => {
+  ipcMain.handle('generate-version', wrap((id,trackIds,choice,difficultyOrTitle,titleOrAssignments,manual) => {
     const {manifest,source} = ensureSource(id);
-    const version = generateVersion(source,trackId,instrument,difficulty,title,manual);
+    const multiple = Array.isArray(trackIds);
+    const instrument = multiple ? 'auto' : choice;
+    const difficulty = multiple ? choice : difficultyOrTitle;
+    const title = multiple ? difficultyOrTitle : titleOrAssignments;
+    const assignments = multiple ? titleOrAssignments || {} : manual;
+    const version = generateVersion(source,trackIds,instrument,difficulty,title,assignments);
     manifest.title = version.title;
-    const variantId = `${instrument}-${difficulty}-${crypto.createHash('sha256').update(`${trackId}|${instrument}|${difficulty}`).digest('hex').slice(0,12)}`;
+    const key = version.trackIds.length === 1 ? `${version.trackId}|${version.instrument}|${difficulty}` :
+      `${version.trackIds.slice().sort().join('|')}|${Object.entries(version.assignments).sort().map(([id,value])=>`${id}:${value}`).join('|')}|${difficulty}`;
+    const variantId = `${version.instrument}-${difficulty}-${crypto.createHash('sha256').update(key).digest('hex').slice(0,12)}`;
     const dir = path.join(songDir(id),'variants'); fs.mkdirSync(dir,{recursive:true});
     writeJSON(path.join(dir,`${variantId}.json`),version);
     fs.writeFileSync(path.join(dir,`${variantId}.musicxml`),versionToMusicXML(version),'utf8');
     fs.writeFileSync(path.join(dir,`${variantId}.mid`),versionToMidi(version));
-    const entry = { id:variantId, songId:id, title:version.title, instrument, difficulty, trackId,
+    const entry = { id:variantId, songId:id, title:version.title, instrument:version.instrument, difficulty,
+      trackId:version.trackId,trackIds:version.trackIds,assignments:version.assignments,
       trackName:version.trackName, noteCount:version.notes.length, generatedAt:new Date().toISOString() };
     manifest.variants = manifest.variants.filter(v=>v.id!==variantId).concat(entry);
     writeJSON(manifestPath(id),manifest);
@@ -89,7 +97,7 @@ app.whenReady().then(() => {
   }));
   ipcMain.handle('load-version', wrap((songId,variantId) => {
     const m=readManifest(songId);
-    if (!/^(?:[a-f0-9]{16}|(?:piano|guitar|bass|drums)-(?:beginner|intermediate|full)-[a-f0-9]{12})$/.test(variantId) || !m.variants.some(v=>v.id===variantId)) throw new Error('版本不存在。');
+    if (!/^(?:[a-f0-9]{16}|(?:piano|guitar|bass|drums|ensemble)-(?:beginner|intermediate|full)-[a-f0-9]{12})$/.test(variantId) || !m.variants.some(v=>v.id===variantId)) throw new Error('版本不存在。');
     const dir=path.join(songDir(songId),'variants');
     return { entry:m.variants.find(v=>v.id===variantId),version:JSON.parse(fs.readFileSync(path.join(dir,`${variantId}.json`),'utf8')),
       musicxml:fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8') };
