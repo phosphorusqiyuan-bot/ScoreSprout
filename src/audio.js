@@ -15,8 +15,9 @@ class ScorePlayer {
   tick() { if (!this.playing) return; const ctx=this.ctx, now=ctx.currentTime, horizon=now+.22;
     while (this.next<this.notes.length) { const n=this.notes[this.next], when=this.base+n.start*60/(this.bpm*480); if (when>horizon) break;
       if (when>=now-.04) this.sound(n,Math.max(now,when),Math.max(.05,n.duration*60/(this.bpm*480))); this.next++; }
-    this.position=Math.max(0,Math.min(this.duration,now-this.base)); this.onProgress(this.position,this.duration);
-    if (this.position>=this.duration+.08) { this.stop(); this.onEnd(); }
+    const elapsed=now-this.base;
+    this.position=Math.max(0,Math.min(this.duration,elapsed)); this.onProgress(this.position,this.duration);
+    if (elapsed>=this.duration+.08) { this.stop(); this.onEnd(); }
   }
   pause() { if (!this.playing) return; this.position=Math.min(this.duration,this.ctx.currentTime-this.base); this.halt(); this.onProgress(this.position,this.duration); }
   stop() { this.halt(); this.position=0; this.onProgress(0,this.duration||0); }
