@@ -22,7 +22,8 @@ function resetPreviewButtons() {
     button.setAttribute('aria-label',`试听${button.dataset.name}`);
   });
 }
-function selectedInstrument(track) { return track.detected==='unknown' ? state.assignments[track.id] : track.detected; }
+function selectedInstrument(track) { return state.source?.inputType==='mp3' ? 'piano' :
+  track.detected==='unknown' ? state.assignments[track.id] : track.detected; }
 function renderSelection() {
   if (!state.source) return;
   for (const row of document.querySelectorAll('.track-item')) {
@@ -55,8 +56,7 @@ function renderTracks() {
     if (t.detected==='unknown') {
       const assign=document.createElement('select'); assign.className='track-assign';
       assign.setAttribute('aria-label',`指定${t.name}的乐器`);
-      const choices=state.source.inputType==='mp3'?instruments.filter(id=>id!=='drums'):instruments;
-      for (const [value,label] of [['','指定乐器'],...choices.map(id=>[id,names[id]])]) {
+      for (const [value,label] of [['','指定乐器'],...instruments.map(id=>[id,names[id]])]) {
         const option=document.createElement('option'); option.value=value; option.textContent=label; assign.append(option);
       }
       assign.value=state.assignments[t.id]||'';
@@ -83,8 +83,14 @@ function showSource(source) {
   $('emptyState').classList.add('hidden'); $('workspace').classList.remove('hidden'); $('result').classList.add('hidden');
   $('songTitle').value=source.title; $('pageTitle').textContent=source.title;
   $('pageSubtitle').textContent=source.inputType==='mp3' ?
-    '已从 MP3 估计音符。请试听轨道，指定乐器，再选择难度。' :
+    '已从 MP3 提取单声部旋律，以钢琴记谱。请先试听，再选择难度。' :
     '选择轨道和难度，生成适合自己的乐谱。';
+  $('selectionHelp').textContent=source.inputType==='mp3' ?
+    'MP3 无法可靠识别乐器，此处只生成钢琴旋律谱。' :
+    '同乐器合并为一个声部，不同乐器组成合奏谱。';
+  $('trackHelp').textContent=source.inputType==='mp3' ?
+    '提取结果可试听；MP3 的原始乐器无法可靠识别。' :
+    '每个轨道都能单独试听；未识别的轨道请手动指定乐器';
   $('tempoValue').textContent=`${source.bpm} BPM${source.inputType==='mp3'?'（估）':''}`;
   $('timeValue').textContent=source.timeSignature.join('/');
   $('exportTranscribedMidi').classList.toggle('hidden',source.inputType!=='mp3');
@@ -170,8 +176,8 @@ async function renderVersion(data) {
 async function openLibrary(item) {
   const source=await window.scoresprout.getSource(item.songId); showSource(source);
   state.trackIds=(item.trackIds||[item.trackId]).filter(id=>source.tracks.some(t=>t.id===id));
-  state.assignments={...(item.assignments||{})};
-  if (!item.assignments && item.instrument && source.tracks.find(t=>t.id===item.trackId)?.detected==='unknown')
+  state.assignments=source.inputType==='mp3'?{}:{...(item.assignments||{})};
+  if (source.inputType!=='mp3'&&!item.assignments && item.instrument && source.tracks.find(t=>t.id===item.trackId)?.detected==='unknown')
     state.assignments[item.trackId]=item.instrument;
   renderTracks(); state.difficulty=item.difficulty;
   document.querySelectorAll('.difficulty-option').forEach(b=>b.classList.toggle('active',b.dataset.difficulty===state.difficulty));
@@ -200,7 +206,7 @@ async function processAudioPick(pick) {
       progress=>notice(`正在转写音符… ${Math.round(progress*100)}%`));
     const source=await window.scoresprout.saveTranscription(picked.token,output.notes);
     showSource(source);await refreshLibrary();
-    notice(`已从 MP3 转写 ${output.notes.length} 个音符。请试听后指定乐器；复杂混音可能需要人工修正。`,'success');
+    notice(`已从 MP3 提取 ${output.notes.length} 个旋律音符。请试听确认，再生成钢琴谱。`,'success');
   } finally {buttons.forEach(button=>button.disabled=false);}
 }
 async function importMp3() {return processAudioPick(()=>window.scoresprout.selectAudio());}

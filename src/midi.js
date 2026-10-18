@@ -171,13 +171,18 @@ function selectNotes(notes, instrument, difficulty, ppq) {
 function generateVersion(source, trackIds, instrument, difficulty, title, manual = false) {
   if ((instrument !== 'auto' && !['piano','guitar','bass','drums'].includes(instrument)) || !DIFFICULTIES[difficulty])
     throw new Error('请选择有效的乐器和难度。');
+  if (source.inputType==='mp3' && instrument!=='auto' && instrument!=='piano')
+    throw new Error('MP3 没有可靠的分轨信息，只能生成钢琴旋律谱。');
   const ids = [...new Set(Array.isArray(trackIds) ? trackIds : [trackIds])];
   if (!ids.length || ids.some(id => typeof id !== 'string')) throw new Error('请至少选择一个有音符的轨道。');
   const tracks = ids.map(id => source.tracks.find(t => t.id === id));
   if (tracks.some(t => !t?.notes.length)) throw new Error('所选轨道没有可用音符，无法生成乐谱。');
   const assignments = {}, groups = new Map();
   for (const track of tracks) {
-    let target = track.detected;
+    let target = source.inputType==='mp3' ? 'piano' : track.detected;
+    if(source.inputType==='mp3' && typeof manual==='object' && manual!==null &&
+      manual[track.id] && manual[track.id]!=='piano')
+      throw new Error('MP3 没有可靠的分轨信息，只能生成钢琴旋律谱。');
     if (target === 'unknown') {
       target = typeof manual === 'object' && manual !== null ? manual[track.id] : manual ? instrument : null;
       if (!['piano','guitar','bass','drums'].includes(target))
@@ -186,8 +191,6 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
     } else if (instrument !== 'auto' && target !== instrument) {
       throw new Error(`轨道「${track.name}」已识别为${INSTRUMENTS[target]}，不能作为${INSTRUMENTS[instrument]}生成乐谱。`);
     }
-    if(source.inputType==='mp3'&&target==='drums')
-      throw new Error('MP3 转写无法可靠识别鼓声，不能将其音高作为鼓谱。');
     if (!groups.has(target)) groups.set(target, []);
     groups.get(target).push(track);
   }

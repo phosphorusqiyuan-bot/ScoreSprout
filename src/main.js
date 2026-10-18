@@ -7,7 +7,7 @@ const { versionToMusicXML } = require('./musicxml');
 const { deleteVersion } = require('./library');
 const { transcribedNotesToMidi } = require('./audio-import');
 const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
-const TRANSCRIPTION_REVISION='spectral-v2';
+const TRANSCRIPTION_REVISION='melody-v3';
 
 let libraryRoot;
 let pendingAudio=null;
@@ -21,14 +21,20 @@ const manifestPath = id => path.join(songDir(id), 'manifest.json');
 const readManifest = id => JSON.parse(fs.readFileSync(manifestPath(id), 'utf8'));
 function writeJSON(file, data) { fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8'); }
 function summary(source) { return { ...source, tracks: source.tracks.map(({notes,...t}) => ({ ...t, noteCount: notes.length })) }; }
+function markMp3Source(source) {
+  source.inputType='mp3';
+  for(const track of source.tracks){
+    track.detected='piano';
+    track.instrumentName='钢琴旋律（转写音色）';
+  }
+  source.warnings.unshift('MP3 只尝试提取单声部旋律，并以钢琴记谱和试听；不能识别原曲乐器。复杂混音可能无法可靠转写。速度暂按 120 BPM 记谱。');
+  return source;
+}
 function ensureSource(id) {
   const manifest = readManifest(id);
   const source = analyzeMidi(fs.readFileSync(path.join(songDir(id), 'original.mid')), manifest.filename);
   source.title = manifest.title;
-  if(manifest.sourceType==='mp3'){
-    source.inputType='mp3';
-    source.warnings.unshift('MP3 转写只估计音高与节奏，不能识别原曲中的乐器或分离鼓声。请试听并手动指定乐器。速度暂按 120 BPM 记谱。');
-  }
+  if(manifest.sourceType==='mp3')markMp3Source(source);
   return { manifest, source };
 }
 function prepareAudio(bytes,filename,title) {
@@ -100,8 +106,7 @@ app.whenReady().then(() => {
       createdAt:new Date().toISOString(),variants:[]};
     writeJSON(manifestPath(id),manifest);
     pendingAudio=null;
-    source.title=manifest.title;source.inputType='mp3';
-    source.warnings.unshift('MP3 转写只估计音高与节奏，不能识别原曲中的乐器或分离鼓声。请试听并手动指定乐器。速度暂按 120 BPM 记谱。');
+    source.title=manifest.title;markMp3Source(source);
     return {id,...summary(source)};
   }));
   ipcMain.handle('get-source', wrap(id => { const {source} = ensureSource(id); return {id,...summary(source)}; }));

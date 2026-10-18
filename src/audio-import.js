@@ -4,9 +4,10 @@ function transcribedNotesToMidi(input) {
   if(!Array.isArray(input)||input.length===0)throw new Error('没有可保存的转写音符。');
   if(input.length>20000)throw new Error('转写音符过多，请缩短音频后重试。');
   const events=[
-    {tick:0,order:0,type:'trackName',text:Buffer.from('音频转写（乐器待指定）','utf8').toString('latin1')},
+    {tick:0,order:0,type:'trackName',text:Buffer.from('MP3 钢琴旋律','utf8').toString('latin1')},
     {tick:0,order:0,type:'setTempo',microsecondsPerBeat:500000},
-    {tick:0,order:0,type:'timeSignature',numerator:4,denominator:4,metronome:24,thirtyseconds:8}
+    {tick:0,order:0,type:'timeSignature',numerator:4,denominator:4,metronome:24,thirtyseconds:8},
+    {tick:0,order:0,type:'programChange',channel:0,programNumber:0}
   ];
   for(const note of input){
     const {pitch,start,duration,velocity}=note||{};

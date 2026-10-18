@@ -1,10 +1,11 @@
-// Lightweight local pitch transcription. It extracts a few prominent pitched
-// notes from each analysis frame; it does not infer instruments or drum parts.
+// Conservative local melody transcription. Audio is not separated into instruments.
 const TRANSCRIBE_SAMPLE_RATE=22050;
 const TRANSCRIBE_FFT_SIZE=8192;
 const TRANSCRIBE_HOP=1024;
 const TRANSCRIBE_MIN_PITCH=40;
 const TRANSCRIBE_MAX_PITCH=88;
+const MELODY_MIN_PITCH=52;
+const MELODY_MAX_PITCH=84;
 
 function fftMagnitude(input) {
   const size=input.length, real=Float64Array.from(input), imag=new Float64Array(size);
@@ -64,7 +65,7 @@ function dominantPitches(magnitudes,sampleRate,fftSize) {
   for(let pitch=TRANSCRIBE_MIN_PITCH;pitch<=TRANSCRIBE_MAX_PITCH;pitch++){
     if(score[pitch]<maximum*.43||fundamental[pitch]<maximumFundamental*.22)continue;
     if(score[pitch]<score[pitch-1]||score[pitch]<score[pitch+1])continue;
-    candidates.push({pitch,strength:score[pitch]});
+    candidates.push({pitch,strength:score[pitch],fundamental:fundamental[pitch]});
   }
   candidates.sort((a,b)=>b.strength-a.strength);
   const chosen=[];
@@ -107,15 +108,8 @@ async function transcribeSamples(samples,sampleRate=TRANSCRIBE_SAMPLE_RATE,onPro
   const window=new Float32Array(TRANSCRIBE_FFT_SIZE);
   for(let i=0;i<window.length;i++)window[i]=.5-.5*Math.cos(2*Math.PI*i/(window.length-1));
   const frameCount=Math.ceil((samples.length+TRANSCRIBE_FFT_SIZE/2)/TRANSCRIBE_HOP);
-  const input=new Float32Array(TRANSCRIBE_FFT_SIZE), active=new Map(), notes=[];
-  function finish(pitch,lastActive) {
-    const note=active.get(pitch);
-    if(!note)return;
-    const end=Math.min(samples.length/sampleRate,(lastActive+1)*TRANSCRIBE_HOP/sampleRate);
-    const duration=end-note.start;
-    if(duration>=.17)notes.push({pitch,start:note.start,duration,velocity:Math.round(72+Math.min(30,note.strength*20))});
-    active.delete(pitch);
-  }
+  const input=new Float32Array(TRANSCRIBE_FFT_SIZE), frames=[];
+  let soundingFrames=0,ambiguousFrames=0;
   for(let frame=0;frame<frameCount;frame++){
     const center=frame*TRANSCRIBE_HOP,offset=center-TRANSCRIBE_FFT_SIZE/2;
     let centralEnergy=0;
@@ -124,33 +118,74 @@ async function transcribeSamples(samples,sampleRate=TRANSCRIBE_SAMPLE_RATE,onPro
     }
     let pitched=[];
     if(centralEnergy/TRANSCRIBE_HOP>.00006){
+      soundingFrames++;
       for(let i=0;i<input.length;i++){
         const position=offset+i,value=position>=0&&position<samples.length?samples[position]:0;
         input[i]=value*window[i];
       }
       pitched=dominantPitches(fftMagnitude(input),sampleRate,TRANSCRIBE_FFT_SIZE);
     }
-    const present=new Set(pitched.map(n=>n.pitch));
-    for(const [pitch,note] of active){
-      if(present.has(pitch)){note.lastActive=frame;note.missing=0;}
-      else if(++note.missing>=2)finish(pitch,note.lastActive);
-    }
-    for(const candidate of pitched){
-      if(!active.has(candidate.pitch))active.set(candidate.pitch,{
-        start:Math.max(0,frame*TRANSCRIBE_HOP/sampleRate-.025),
-        lastActive:frame,missing:0,strength:candidate.strength/TRANSCRIBE_FFT_SIZE
-      });
-    }
+    const melody=pitched.filter(n=>n.pitch>=MELODY_MIN_PITCH&&n.pitch<=MELODY_MAX_PITCH);
+    const [first,second]=melody;
+    const octave=melody.length===2&&second.pitch===first.pitch+12&&
+      second.fundamental>=first.fundamental*.8&&second.strength>=first.strength*.65 ? second : null;
+    // Comparable peaks have no defensible melody choice. Silence is better than
+    // inventing simultaneous or rapidly alternating notes from a full mix.
+    if(first&&second&&!octave&&first.strength<second.strength*1.32)ambiguousFrames++;
+    frames.push(octave?.pitch ?? (first&&(!second||first.strength>=second.strength*1.32)?first.pitch:null));
     if(frame%16===0){
       onProgress(Math.min(1,frame/frameCount));
       await new Promise(resolve=>setTimeout(resolve,0));
     }
   }
-  for(const [pitch,note] of active)finish(pitch,note.lastActive);
   onProgress(1);
-  const ordered=notes.sort((a,b)=>a.start-b.start||a.pitch-b.pitch);
-  if(!ordered.length)throw new Error('没有检测到可靠的音符。请尝试旋律更清晰的 MP3。');
-  return ordered;
+  // Five-frame majority removes isolated pitch guesses while retaining note
+  // transitions. A short gap in the same note is bridged after segmentation.
+  const stable=frames.map((pitch,index)=>{
+    if(pitch===null)return null;
+    let support=0;
+    for(let j=Math.max(0,index-2);j<=Math.min(frames.length-1,index+2);j++)
+      if(frames[j]===pitch)support++;
+    return support>=3?pitch:null;
+  });
+  for(let i=1;i<stable.length-1;i++)
+    if(stable[i]===null&&stable[i-1]!==null&&stable[i-1]===stable[i+1])stable[i]=stable[i-1];
+  const frameSeconds=TRANSCRIBE_HOP/sampleRate,audioSeconds=samples.length/sampleRate;
+  const notes=[];
+  let start=0,pitch=null;
+  for(let i=0;i<=stable.length;i++){
+    const current=stable[i]??null;
+    if(current===pitch)continue;
+    if(pitch!==null){
+      const begin=Math.max(0,start*frameSeconds-.025);
+      const end=Math.min(audioSeconds,i*frameSeconds);
+      if(end-begin>=.23)notes.push({pitch,start:begin,duration:end-begin,velocity:84});
+    }
+    start=i;pitch=current;
+  }
+  for(let i=1;i<notes.length;i++){
+    const previous=notes[i-1],next=notes[i],gap=next.start-previous.start-previous.duration;
+    if(previous.pitch===next.pitch&&gap>=0&&gap<=.12){
+      previous.duration=next.start+next.duration-previous.start;
+      notes.splice(i--,1);
+    }
+  }
+  // A brief bass or chord peak should not pull an otherwise high melody into a
+  // different register. Use this recording's own note distribution, not a fixed
+  // pitch cutoff, so genuinely low melodies remain possible.
+  if(notes.length>=3){
+    const orderedPitches=notes.map(note=>note.pitch).sort((a,b)=>a-b);
+    const middle=orderedPitches[Math.floor(orderedPitches.length/2)];
+    for(let i=notes.length-1;i>=0;i--)
+      if(Math.abs(notes[i].pitch-middle)>14)notes.splice(i,1);
+  }
+  const covered=notes.reduce((total,n)=>total+n.duration,0);
+  if(!notes.length||
+    (soundingFrames>10&&covered/(soundingFrames*frameSeconds)<.25)||
+    (soundingFrames>20&&ambiguousFrames/soundingFrames>.55)||
+    notes.length>Math.max(8,audioSeconds*4.5))
+    throw new Error('这段 MP3 的旋律不够清晰，无法可靠转写。请尝试人声或独奏更突出的片段；软件不会生成大量猜测音符。');
+  return notes;
 }
 async function transcribeMp3(bytes,onProgress=()=>{}) {
   const Context=globalThis.AudioContext||globalThis.webkitAudioContext;

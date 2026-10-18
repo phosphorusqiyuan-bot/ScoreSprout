@@ -3,7 +3,7 @@
   <aside class="sidebar">
     <div class="brand"><div class="mark">♬</div><div><strong>ScoreSprout</strong><span>让喜欢的旋律，从这里发芽</span></div></div>
     <button id="importBtn" class="primary wide">＋ 导入 MIDI 文件</button>
-    <button id="importMp3Btn" class="ghost wide audio-import-button">♫ 导入 MP3 并转写</button>
+    <button id="importMp3Btn" class="ghost wide audio-import-button">♫ MP3 提取钢琴旋律</button>
     <div class="side-heading"><h3>本地音乐库</h3><span id="libraryCount">0</span></div>
     <input id="search" type="search" placeholder="搜索歌曲名…">
     <div class="filters"><select id="filterInstrument"><option value="">所有乐器</option><option value="piano">钢琴</option><option value="guitar">吉他</option><option value="drums">鼓</option><option value="bass">贝斯</option><option value="ensemble">合奏</option></select><select id="filterDifficulty"><option value="">所有难度</option><option value="beginner">新手版</option><option value="intermediate">进阶版</option><option value="full">完整版</option></select></div>
@@ -11,15 +11,15 @@
     <div class="side-footer">文件与乐谱仅保存在这台电脑</div>
   </aside>
   <main>
-    <header class="topbar"><div><div class="eyebrow">MP3 / MIDI → 适合你的乐谱</div><h1 id="pageTitle">开始一首新曲目</h1><p id="pageSubtitle">导入 MIDI 或 MP3，选择乐器和难度，就能查看并试听乐谱。</p></div><div class="midi-sources"><span>您可以在以下网站找到 MIDI 文件：</span><div class="midi-source-links"><a href="https://www.midishow.com/" target="_blank" rel="noopener noreferrer">MidiShow ↗</a><a href="https://bitmidi.com/" target="_blank" rel="noopener noreferrer">BitMidi ↗</a><a href="https://freemidi.org/" target="_blank" rel="noopener noreferrer">FreeMIDI ↗</a><a href="https://www.vgmusic.com/" target="_blank" rel="noopener noreferrer">VGMusic ↗</a></div></div></header>
+    <header class="topbar"><div><div class="eyebrow">MP3 / MIDI → 适合你的乐谱</div><h1 id="pageTitle">开始一首新曲目</h1><p id="pageSubtitle">导入 MIDI 选择乐器，或从 MP3 提取钢琴旋律，再选择难度查看乐谱。</p></div><div class="midi-sources"><span>您可以在以下网站找到 MIDI 文件：</span><div class="midi-source-links"><a href="https://www.midishow.com/" target="_blank" rel="noopener noreferrer">MidiShow ↗</a><a href="https://bitmidi.com/" target="_blank" rel="noopener noreferrer">BitMidi ↗</a><a href="https://freemidi.org/" target="_blank" rel="noopener noreferrer">FreeMIDI ↗</a><a href="https://www.vgmusic.com/" target="_blank" rel="noopener noreferrer">VGMusic ↗</a></div></div></header>
     <div id="notice" class="notice hidden"></div>
-    <section id="emptyState" class="empty"><div class="empty-icon">♫</div><h2>把喜欢的音乐变成自己的乐谱</h2><p>导入 MIDI，或从 MP3 估计旋律音符。生成后可以试听，并保存到本地音乐库。</p><button id="emptyImportBtn" class="primary">选择 MIDI 文件</button><button id="emptyImportMp3Btn" class="ghost empty-mp3">选择 MP3 文件</button><small>支持 .mid、.midi 和 .mp3；MP3 转写更适合清晰的旋律</small></section>
+    <section id="emptyState" class="empty"><div class="empty-icon">♫</div><h2>把喜欢的音乐变成自己的乐谱</h2><p>导入 MIDI，或从 MP3 提取钢琴旋律。生成后可以试听，并保存到本地音乐库。</p><button id="emptyImportBtn" class="primary">选择 MIDI 文件</button><button id="emptyImportMp3Btn" class="ghost empty-mp3">选择 MP3 文件</button><small>支持 .mid、.midi 和 .mp3；MP3 更适合人声或独奏突出的片段</small></section>
     <div id="workspace" class="workspace hidden">
       <section class="setup card"><div class="section-title"><div><span class="step">01</span><h2>选择要演奏的部分</h2></div><span id="sourceMeta" class="muted"></span></div>
         <label class="field song-field">歌曲名 <input id="songTitle" maxlength="120" placeholder="歌曲名"></label>
         <div class="meta-grid"><div><small>速度</small><strong id="tempoValue">—</strong></div><div><small>拍号</small><strong id="timeValue">—</strong></div><div><small>调号</small><strong id="keyValue">—</strong></div><div><small>轨道</small><strong id="trackCount">—</strong></div></div>
-        <div class="field-label">选择轨道（可多选） <span>每个轨道都能单独试听；未识别的轨道请手动指定乐器</span></div><div id="trackList" class="track-list"></div>
-        <div class="control-row selection-row"><strong id="selectionSummary">已选 0 个轨道</strong><span class="muted">同乐器合并为一个声部，不同乐器组成合奏谱。</span><button id="retranscribeMp3" class="ghost hidden">重新转写原始 MP3</button><button id="exportTranscribedMidi" class="ghost hidden">导出转写 MIDI</button></div>
+        <div class="field-label">选择轨道（可多选） <span id="trackHelp">每个轨道都能单独试听；未识别的轨道请手动指定乐器</span></div><div id="trackList" class="track-list"></div>
+        <div class="control-row selection-row"><strong id="selectionSummary">已选 0 个轨道</strong><span id="selectionHelp" class="muted">同乐器合并为一个声部，不同乐器组成合奏谱。</span><button id="retranscribeMp3" class="ghost hidden">重新转写原始 MP3</button><button id="exportTranscribedMidi" class="ghost hidden">导出转写 MIDI</button></div>
       </section>
       <section class="difficulty card"><div class="section-title"><div><span class="step">02</span><h2>选择演奏难度</h2></div></div><div class="difficulty-grid"><button data-difficulty="beginner" class="difficulty-option active"><b>新手版</b><span>少量音符 · 简单节拍 · 舒适音域</span></button><button data-difficulty="intermediate" class="difficulty-option"><b>进阶版</b><span>保留旋律与关键节奏</span></button><button data-difficulty="full" class="difficulty-option"><b>完整版</b><span>尽量保留原始轨道</span></button></div><button id="generateBtn" class="primary generate">生成乐谱 <span>→</span></button></section>
       <section id="result" class="result card hidden"><div class="section-title"><div><span class="step">03</span><h2 id="resultTitle">生成的乐谱</h2><p id="resultDetails" class="muted"></p></div><div class="export-actions"><button id="exportXml" class="ghost">导出 MusicXML</button><button id="exportMidi" class="ghost">导出 MIDI</button><button id="deleteScore" class="ghost danger">删除乐谱</button></div></div>

@@ -3,13 +3,12 @@
   const source=state.source;
   if(!source||source.inputType!=='mp3'||source.tracks.length!==1)throw Error('MP3 import failed');
   const track=source.tracks[0];
-  if(track.detected!=='unknown'||track.noteCount!==1)throw Error(`440 Hz audio must produce one note, got ${track.noteCount}`);
+  if(track.detected!=='piano'||track.noteCount!==1)throw Error(`440 Hz audio must produce one piano melody note, got ${track.noteCount}`);
   const preview=await window.scoresprout.previewTrack(source.id,track.id);
   if(!preview.notes.some(note=>note.pitch===69&&note.duration>=480*4))
     throw Error('440 Hz sustained note was not transcribed correctly');
-  const assign=document.querySelector('.track-assign');
-  assign.value='piano';assign.dispatchEvent(new Event('change',{bubbles:true}));
-  if(state.assignments[track.id]!=='piano')throw Error('manual instrument assignment failed');
+  if(document.querySelector('.track-assign'))throw Error('MP3 instrument choice must be unavailable');
+  if(!$('selectionSummary').textContent.includes('钢琴'))throw Error('MP3 piano selection missing');
   const rawMidi=await window.scoresprout.exportSourceMidi(source.id);
   state.difficulty='full';
   await generate();
