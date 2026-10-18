@@ -21,10 +21,18 @@
         <div class="control-row selection-row"><strong id="selectionSummary">已选 0 个轨道</strong><span class="muted">同乐器合并为一个声部，不同乐器组成合奏谱。</span></div>
       </section>
       <section class="difficulty card"><div class="section-title"><div><span class="step">02</span><h2>选择演奏难度</h2></div></div><div class="difficulty-grid"><button data-difficulty="beginner" class="difficulty-option active"><b>新手版</b><span>少量音符 · 简单节拍 · 舒适音域</span></button><button data-difficulty="intermediate" class="difficulty-option"><b>进阶版</b><span>保留旋律与关键节奏</span></button><button data-difficulty="full" class="difficulty-option"><b>完整版</b><span>尽量保留原始轨道</span></button></div><button id="generateBtn" class="primary generate">生成乐谱 <span>→</span></button></section>
-      <section id="result" class="result card hidden"><div class="section-title"><div><span class="step">03</span><h2 id="resultTitle">生成的乐谱</h2><p id="resultDetails" class="muted"></p></div><div class="export-actions"><button id="exportXml" class="ghost">导出 MusicXML</button><button id="exportMidi" class="ghost">导出 MIDI</button></div></div>
+      <section id="result" class="result card hidden"><div class="section-title"><div><span class="step">03</span><h2 id="resultTitle">生成的乐谱</h2><p id="resultDetails" class="muted"></p></div><div class="export-actions"><button id="exportXml" class="ghost">导出 MusicXML</button><button id="exportMidi" class="ghost">导出 MIDI</button><button id="deleteScore" class="ghost danger">删除乐谱</button></div></div>
         <div class="player"><button id="playBtn" class="play-button" aria-label="播放">▶</button><button id="stopBtn" class="icon-button" aria-label="停止">■</button><span id="currentTime">0:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="播放进度"><span id="totalTime">0:00</span><span id="playingInstrument" class="sound-label"></span></div>
         <div class="score-shell"><div id="score"></div></div><p class="score-caption">谱面、试听与导出的 MIDI 使用同一份生成音符。</p>
       </section>
     </div>
   </main>
-</div><script src="../node_modules/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js"></script><script src="audio.js"></script><script src="renderer.js"></script></body></html>
+</div>
+<dialog id="deleteDialog" class="delete-dialog" aria-labelledby="deleteTitle" aria-describedby="deleteDetails deleteExplanation">
+  <h2 id="deleteTitle">删除乐谱？</h2>
+  <p id="deleteDetails"></p>
+  <p id="deleteExplanation">将删除此版本及其音乐库内的文件。原始 MIDI、其他版本和已导出的文件会保留。</p>
+  <p id="deleteError" class="delete-error" role="alert"></p>
+  <div class="dialog-actions"><button id="cancelDelete" class="ghost" autofocus>取消</button><button id="confirmDelete" class="ghost danger">删除此版本</button></div>
+</dialog>
+<script src="../node_modules/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js"></script><script src="audio.js"></script><script src="renderer.js"></script></body></html>

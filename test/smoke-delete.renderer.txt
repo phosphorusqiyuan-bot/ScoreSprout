@@ -1,0 +1,23 @@
+(async()=>{
+  await refreshLibrary();
+  const item=state.library.find(v=>v.instrument==='piano'&&v.difficulty==='full');
+  const button=[...document.querySelectorAll('.library-delete')].find(b=>b.dataset.id===item.id);
+  if(!button)throw Error('delete button missing');
+  button.click();
+  if(!$('deleteDialog').open||!$('deleteTitle').textContent.includes(item.title))throw Error('confirmation missing');
+  $('cancelDelete').click();
+  if((await window.scoresprout.listLibrary()).length!==13)throw Error('cancel deleted a score');
+  // Allow the dialog close event to run before opening a new confirmation.
+  await new Promise(resolve=>setTimeout(resolve,30));
+  await openLibrary(item);await player.play();
+  $('deleteScore').click();
+  await confirmDeleteScore();
+  if($('deleteDialog').open||state.library.length!==12)throw Error('delete failed');
+  if(state.entry||!$('result').classList.contains('hidden')||player.playing||player.notes.length)throw Error('deleted score remained active');
+  if(!state.source||state.trackIds.length===0)throw Error('source selection lost');
+  let rejected=false;try{await window.scoresprout.loadVersion(item.songId,item.id);}catch{rejected=true;}
+  if(!rejected)throw Error('deleted version still loads');
+  const source=await window.scoresprout.getSource(item.songId);
+  if(source.tracks.length!==4)throw Error('original MIDI was removed');
+  return {deleted:item.id,songId:item.songId,cancel:true,playbackCleared:true,library:12};
+})()

@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const names = { piano:'钢琴', guitar:'吉他', drums:'鼓', bass:'贝斯', ensemble:'合奏' };
 const levels = { beginner:'新手版', intermediate:'进阶版', full:'完整版' };
 const instruments = ['piano','guitar','bass','drums'];
-const state = { source:null, trackIds:[], assignments:{}, difficulty:'beginner', entry:null, library:[], previewingTrackId:null };
+const state = { source:null, trackIds:[], assignments:{}, difficulty:'beginner', entry:null, library:[], previewingTrackId:null, pendingDelete:null, deleting:false };
 const formatTime = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 const player = new ScorePlayer((now,total) => {
   $('currentTime').textContent=formatTime(now);
@@ -103,13 +103,47 @@ function renderLibrary() {
     box.append(p); return;
   }
   for (const item of items) {
+    const row=document.createElement('div'); row.className='library-row';
     const button=document.createElement('button');
     button.className=`library-item ${state.entry?.id===item.id&&state.entry?.songId===item.songId?'active':''}`;
     const title=document.createElement('strong'), meta=document.createElement('span');
     title.textContent=`${item.title} · ${levels[item.difficulty]}`;
     meta.textContent=`${names[item.instrument]||item.instrument} · ${item.trackName}`;
     button.append(title,meta);
-    button.addEventListener('click',()=>guarded(()=>openLibrary(item))); box.append(button);
+    button.addEventListener('click',()=>guarded(()=>openLibrary(item)));
+    const remove=document.createElement('button'); remove.type='button'; remove.className='library-delete';
+    remove.textContent='删除'; remove.dataset.id=item.id;
+    remove.setAttribute('aria-label',`删除 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
+    remove.addEventListener('click',()=>requestDelete(item));
+    row.append(button,remove); box.append(row);
+  }
+}
+function requestDelete(item) {
+  if (!item || state.deleting) return;
+  state.pendingDelete=item;
+  $('deleteTitle').textContent=`删除「${item.title} · ${levels[item.difficulty]}」？`;
+  $('deleteDetails').textContent=`${names[item.instrument]} · ${item.trackName}`;
+  $('deleteError').textContent='';
+  $('deleteDialog').showModal(); $('cancelDelete').focus();
+}
+async function confirmDeleteScore() {
+  const item=state.pendingDelete;
+  if (!item || state.deleting) return;
+  state.deleting=true; $('confirmDelete').disabled=true; $('cancelDelete').disabled=true;
+  try {
+    const result=await window.scoresprout.deleteVersion(item.songId,item.id);
+    if (state.entry?.id===item.id && state.entry?.songId===item.songId) {
+      player.load([],120,'piano'); previewPlayer.stop(); resetPreviewButtons();
+      state.entry=null; $('playBtn').textContent='▶';
+      $('score').replaceChildren(); $('result').classList.add('hidden');
+    }
+    state.library=state.library.filter(v=>v.id!==item.id||v.songId!==item.songId);
+    renderLibrary(); $('deleteDialog').close();
+    notice(result.warning || '乐谱已删除。原始 MIDI 已保留，可以重新选择轨道和难度生成。',result.warning?'':'success');
+  } catch (error) {
+    $('deleteError').textContent=error.message||String(error);
+  } finally {
+    state.deleting=false; $('confirmDelete').disabled=false; $('cancelDelete').disabled=false;
   }
 }
 async function renderVersion(data) {
@@ -177,6 +211,11 @@ function bind() {
   $('importBtn').addEventListener('click',()=>guarded(importMidi));
   $('emptyImportBtn').addEventListener('click',()=>guarded(importMidi));
   $('generateBtn').addEventListener('click',()=>guarded(generate));
+  $('deleteScore').addEventListener('click',()=>requestDelete(state.entry));
+  $('cancelDelete').addEventListener('click',()=>{if(!state.deleting)$('deleteDialog').close();});
+  $('confirmDelete').addEventListener('click',confirmDeleteScore);
+  $('deleteDialog').addEventListener('cancel',event=>{if(state.deleting)event.preventDefault();});
+  $('deleteDialog').addEventListener('close',()=>{if(!$('deleteDialog').open)state.pendingDelete=null;});
   $('songTitle').addEventListener('change',()=>guarded(async()=>{
     if(state.source) {
       const name=await window.scoresprout.renameSong(state.source.id,$('songTitle').value);

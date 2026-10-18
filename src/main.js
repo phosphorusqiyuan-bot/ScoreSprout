@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { analyzeMidi, generateVersion, versionToMidi, INSTRUMENTS, DIFFICULTIES } = require('./midi');
 const { versionToMusicXML } = require('./musicxml');
+const { deleteVersion } = require('./library');
 const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
 
 let libraryRoot;
@@ -102,6 +103,7 @@ app.whenReady().then(() => {
     return { entry:m.variants.find(v=>v.id===variantId),version:JSON.parse(fs.readFileSync(path.join(dir,`${variantId}.json`),'utf8')),
       musicxml:fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8') };
   }));
+  ipcMain.handle('delete-version', wrap((songId,variantId) => deleteVersion(libraryRoot,songId,variantId)));
   ipcMain.handle('export-version', wrap(async (songId,variantId,format) => {
     const m=readManifest(songId), v=m.variants.find(v=>v.id===variantId);
     if (!v) throw new Error('版本不存在。');

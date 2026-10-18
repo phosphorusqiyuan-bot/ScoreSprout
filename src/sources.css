@@ -36,6 +36,28 @@
 .selection-row { gap: 12px; align-items: center; flex-wrap: wrap; }
 .selection-row strong { color: #356e43; }
 
+.library-row { display: flex; align-items: center; gap: 3px; }
+.library-row .library-item { flex: 1; min-width: 0; }
+.library-delete {
+  flex: none; border: 0; border-radius: 7px; padding: 8px 6px;
+  background: transparent; color: #d7a79b; cursor: pointer; font-size: 11px;
+}
+.library-delete:hover, .library-delete:focus-visible { background: #58382f; color: #ffe5dc; }
+.export-actions { flex-wrap: wrap; justify-content: flex-end; }
+.ghost.danger { color: #a84336; border-color: #e9c6be; }
+.ghost.danger:hover { background: #fff0ed; }
+.delete-dialog {
+  width: min(460px, 90vw); border: 1px solid #dfe8dc; border-radius: 16px;
+  padding: 25px; color: #26362e; box-shadow: 0 20px 70px #0003;
+}
+.delete-dialog::backdrop { background: #172c2273; }
+.delete-dialog h2 { margin: 0 0 14px; font-size: 18px; overflow-wrap: anywhere; }
+.delete-dialog p { font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.delete-error { color: #a84336; }
+.delete-error:empty { display: none; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+button:disabled { opacity: .55; cursor: wait; }
+
 @media (max-width: 1100px) {
   .topbar { flex-wrap: wrap; gap: 18px; }
   .midi-sources { width: 100%; max-width: none; margin-left: 0; }

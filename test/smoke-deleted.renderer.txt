@@ -1,0 +1,9 @@
+(async()=>{
+  const library=await window.scoresprout.listLibrary();
+  if(library.length!==12||library.some(v=>v.instrument==='piano'&&v.difficulty==='full'))
+    throw Error('deletion did not persist');
+  const item=library.find(v=>v.instrument==='ensemble');
+  await openLibrary(item);
+  if(!$('score').querySelector('svg'))throw Error('other version was damaged');
+  return {library:12,deletionPersisted:true,otherScore:true};
+})()

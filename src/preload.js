@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('scoresprout', {
   renameSong:(id,title)=>invoke('rename-song',id,title), previewTrack:(id,trackId)=>invoke('preview-track',id,trackId),
   generate:(...args)=>invoke('generate-version',...args), listLibrary:()=>invoke('list-library'),
   loadVersion:(songId,variantId)=>invoke('load-version',songId,variantId),
+  deleteVersion:(songId,variantId)=>invoke('delete-version',songId,variantId),
   exportVersion:(songId,variantId,format)=>invoke('export-version',songId,variantId,format)
 });

@@ -33,6 +33,7 @@ corepack pnpm start
 3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。已识别的乐器轨道不能冒充另一种乐器。
 4. 在结果区域播放、暂停、停止或拖动进度。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
 5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。再次选择难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
+6. 点击音乐库条目旁的「删除」或结果区的「删除乐谱」，确认后移除此版本。原始 MIDI、其他版本和已导出的文件会保留；当前打开的版本被删除时，播放会停止，仍可重新生成。
 
 音乐库保存在 Electron 的 `userData/library` 目录，Windows 通常是 `%APPDATA%\scoresprout\library`。每首歌保存 `original.mid` 和 `manifest.json`；每个生成版本保存 JSON、`.musicxml`、`.mid`。无需账号或云服务。
 
@@ -46,7 +47,7 @@ corepack pnpm test
 corepack pnpm smoke
 ```
 
-`smoke` 会启动真正的 Electron 应用两次：首次导入四乐器示例，为每种乐器生成三档谱，并生成一份多轨合奏谱，逐一渲染、导出；第二次检查音乐库持久化、合奏重开及播放、暂停、停止、进度跳转。结果和导出文件位于项目下自动创建的 `.smoke-*` 目录。
+`smoke` 会启动真正的 Electron 应用四次：导入、生成并导出 13 个版本；重启检查乐谱和播放控制；验证取消删除和删除正在播放的版本；再次重启确认删除结果及其他版本可用。结果和导出文件位于项目下自动创建的 `.smoke-*` 目录。
 
 ## 技术选择
 
@@ -96,6 +97,7 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). A recognized instrument track cannot be relabeled as another instrument.
 4. Play, pause, stop, or seek through the result. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
 5. Reopen saved versions from the local library, or filter by song, instrument, and difficulty. Generate another difficulty to save another version. Different instruments of the same song have separate internal IDs.
+6. Click **删除** (Delete) beside a library entry or **删除乐谱** (Delete score) in the result panel, then confirm. Only that version is removed; the original MIDI, other versions, and exported files are kept. Deleting the open version stops playback, and you can generate it again from the retained source.
 
 The library lives in Electron's `userData/library` directory, usually `%APPDATA%\scoresprout\library` on Windows. Each song stores `original.mid` and `manifest.json`; each arrangement stores JSON, `.musicxml`, and `.mid` files. No account or cloud service is required.
 
@@ -109,7 +111,7 @@ corepack pnpm test
 corepack pnpm smoke
 ```
 
-The smoke test launches the Electron app twice. It imports the ensemble, generates and renders all three difficulty levels for all four instruments plus one multi-track ensemble, and exports them. On the second launch, it checks library persistence, ensemble reopening, and the play, pause, stop, and seek controls. Outputs are written to a `.smoke-*` directory in the project.
+The smoke test launches the Electron app four times: to generate, render, and export 13 versions; to check persistence and playback controls; to check cancellation and deletion of a playing score; and to verify that deletion persists while other versions remain usable. Outputs are written to a `.smoke-*` directory in the project.
 
 ### Technology
 
