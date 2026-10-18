@@ -169,7 +169,13 @@ app.whenReady().then(() => {
     const items=[];
     for (const item of fs.readdirSync(libraryRoot,{withFileTypes:true})) {
       if (!item.isDirectory() || !/^[a-f0-9]{24}$/.test(item.name)) continue;
-      try { const m=readManifest(item.name); for (const v of m.variants) items.push({ ...v,title:m.title }); }
+      try {
+        const m=readManifest(item.name);
+        for (const v of m.variants) items.push({ ...v,title:m.title });
+        if(m.sourceType==='mp3'&&!m.variants.length)
+          items.push({id:'source',songId:item.name,title:m.title,instrument:'piano',
+            difficulty:null,sourceOnly:true,generatedAt:m.createdAt||'1970-01-01T00:00:00.000Z'});
+      }
       catch { /* damaged entry does not hide the rest of the library */ }
     }
     return items.sort((a,b)=>b.generatedAt.localeCompare(a.generatedAt));

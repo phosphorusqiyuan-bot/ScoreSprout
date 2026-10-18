@@ -28,7 +28,7 @@ corepack pnpm start
 
 ## 使用
 
-1. 点击「导入 MIDI 文件」，或点击「MP3 提取钢琴旋律」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。如果以前导入的 MP3 含有杂音符，打开旧乐谱后点击「重新转写原始 MP3」；新版结果会另存，旧乐谱保留。
+1. 点击「导入 MIDI 文件」，或点击「MP3 提取钢琴旋律」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。如果以前导入的 MP3 含有杂音符，打开旧乐谱后点击「重新转写原始 MP3」；新版结果会另存，旧乐谱保留。尚未生成乐谱的 MP3 也会在音乐库显示为「待生成」，重启后仍可打开。
 2. 查看速度、拍号、调号和轨道列表，修改歌曲名。MIDI 可勾选多条有音符的轨道、试听并手动指定未识别的乐器。MP3 不提供乐器选择，统一以钢琴演奏提取到的旋律；请先试听确认。
 3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。已识别的乐器轨道不能冒充另一种乐器。
 4. 在结果区域播放、暂停、停止或拖动进度。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
@@ -94,7 +94,7 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 
 ### Use
 
-1. Click **导入 MIDI 文件** (Import MIDI file) or **MP3 提取钢琴旋律** (Extract piano melody from MP3). The app copies the file to its local library without changing the original. For an MP3, **导出转写 MIDI** exports the raw transcription immediately. For an older noisy import, open its score and click **重新转写原始 MP3** (Retranscribe original MP3). The improved transcription is saved separately; existing scores remain available.
+1. Click **导入 MIDI 文件** (Import MIDI file) or **MP3 提取钢琴旋律** (Extract piano melody from MP3). The app copies the file to its local library without changing the original. For an MP3, **导出转写 MIDI** exports the raw transcription immediately. For an older noisy import, open its score and click **重新转写原始 MP3** (Retranscribe original MP3). The improved transcription is saved separately; existing scores remain available. MP3 sources without a generated score also appear in the library as **待生成** (Pending) and can be reopened after a restart.
 2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. MIDI tracks can be previewed, selected together, and assigned an instrument when unidentified. MP3 results have no instrument selector: they use piano to play the extracted melody. Preview before generating a score.
 3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). A recognized instrument track cannot be relabeled as another instrument.
 4. Play, pause, stop, or seek through the result. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.

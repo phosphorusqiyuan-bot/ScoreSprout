@@ -119,15 +119,19 @@ function renderLibrary() {
     const button=document.createElement('button');
     button.className=`library-item ${state.entry?.id===item.id&&state.entry?.songId===item.songId?'active':''}`;
     const title=document.createElement('strong'), meta=document.createElement('span');
-    title.textContent=`${item.title} · ${levels[item.difficulty]}`;
-    meta.textContent=`${names[item.instrument]||item.instrument} · ${item.trackName}`;
+    title.textContent=item.sourceOnly?`${item.title} · 待生成`:`${item.title} · ${levels[item.difficulty]}`;
+    meta.textContent=item.sourceOnly?'MP3 · 已保存原音频':`${names[item.instrument]||item.instrument} · ${item.trackName}`;
     button.append(title,meta);
     button.addEventListener('click',()=>guarded(()=>openLibrary(item)));
-    const remove=document.createElement('button'); remove.type='button'; remove.className='library-delete';
-    remove.textContent='删除'; remove.dataset.id=item.id;
-    remove.setAttribute('aria-label',`删除 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
-    remove.addEventListener('click',()=>requestDelete(item));
-    row.append(button,remove); box.append(row);
+    row.append(button);
+    if(!item.sourceOnly){
+      const remove=document.createElement('button'); remove.type='button'; remove.className='library-delete';
+      remove.textContent='删除'; remove.dataset.id=item.id;
+      remove.setAttribute('aria-label',`删除 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
+      remove.addEventListener('click',()=>requestDelete(item));
+      row.append(remove);
+    }
+    box.append(row);
   }
 }
 function requestDelete(item) {
@@ -149,8 +153,7 @@ async function confirmDeleteScore() {
       state.entry=null; $('playBtn').textContent='▶';
       $('score').replaceChildren(); $('result').classList.add('hidden');
     }
-    state.library=state.library.filter(v=>v.id!==item.id||v.songId!==item.songId);
-    renderLibrary(); $('deleteDialog').close();
+    await refreshLibrary(); $('deleteDialog').close();
     notice(result.warning || '乐谱已删除。原始 MIDI 已保留，可以重新选择轨道和难度生成。',result.warning?'':'success');
   } catch (error) {
     $('deleteError').textContent=error.message||String(error);
@@ -175,6 +178,7 @@ async function renderVersion(data) {
 }
 async function openLibrary(item) {
   const source=await window.scoresprout.getSource(item.songId); showSource(source);
+  if(item.sourceOnly)return;
   state.trackIds=(item.trackIds||[item.trackId]).filter(id=>source.tracks.some(t=>t.id===id));
   state.assignments=source.inputType==='mp3'?{}:{...(item.assignments||{})};
   if (source.inputType!=='mp3'&&!item.assignments && item.instrument && source.tracks.find(t=>t.id===item.trackId)?.detected==='unknown')
