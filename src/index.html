@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ScoreSprout</title><link rel="stylesheet" href="style.css"></head>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ScoreSprout</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="sources.css"></head>
 <body><div class="app">
   <aside class="sidebar">
     <div class="brand"><div class="mark">♬</div><div><strong>ScoreSprout</strong><span>让喜欢的旋律，从这里发芽</span></div></div>
@@ -10,7 +10,7 @@
     <div class="side-footer">文件与乐谱仅保存在这台电脑</div>
   </aside>
   <main>
-    <header class="topbar"><div><div class="eyebrow">MIDI → 适合你的乐谱</div><h1 id="pageTitle">开始一首新曲目</h1><p id="pageSubtitle">导入 MIDI，选择乐器和难度，就能查看并试听乐谱。</p></div><div class="top-badge">本地处理 <span>●</span></div></header>
+    <header class="topbar"><div><div class="eyebrow">MIDI → 适合你的乐谱</div><h1 id="pageTitle">开始一首新曲目</h1><p id="pageSubtitle">导入 MIDI，选择乐器和难度，就能查看并试听乐谱。</p></div><div class="midi-sources"><span>您可以在以下网站找到 MIDI 文件：</span><div class="midi-source-links"><a href="https://www.midishow.com/" target="_blank" rel="noopener noreferrer">MidiShow ↗</a><a href="https://bitmidi.com/" target="_blank" rel="noopener noreferrer">BitMidi ↗</a><a href="https://freemidi.org/" target="_blank" rel="noopener noreferrer">FreeMIDI ↗</a><a href="https://www.vgmusic.com/" target="_blank" rel="noopener noreferrer">VGMusic ↗</a></div></div></header>
     <div id="notice" class="notice hidden"></div>
     <section id="emptyState" class="empty"><div class="empty-icon">♫</div><h2>把喜欢的 MIDI 变成自己的乐谱</h2><p>支持钢琴、吉他、鼓、贝斯。生成后可以直接试听，并保存到本地音乐库。</p><button id="emptyImportBtn" class="primary">选择 MIDI 文件</button><small>支持 .mid 和 .midi</small></section>
     <div id="workspace" class="workspace hidden">

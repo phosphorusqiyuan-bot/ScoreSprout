@@ -1,9 +1,10 @@
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { analyzeMidi, generateVersion, versionToMidi, INSTRUMENTS, DIFFICULTIES } = require('./midi');
 const { versionToMusicXML } = require('./musicxml');
+const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
 
 let libraryRoot;
 if (process.env.SCORESPROUT_TEST_DATA) {
@@ -109,6 +110,11 @@ app.whenReady().then(() => {
 
   const win=new BrowserWindow({width:1450,height:930,minWidth:1050,minHeight:700,show:!process.env.SCORESPROUT_SMOKE_STAGE,backgroundColor:'#f7f7f2',
     webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true} });
+  win.webContents.setWindowOpenHandler(({url}) => {
+    if (midiSourceUrls.has(url)) shell.openExternal(url);
+    return { action:'deny' };
+  });
+  win.webContents.on('will-navigate',event => event.preventDefault());
   win.loadFile(path.join(__dirname,'index.html'));
   if (process.env.SCORESPROUT_SMOKE_STAGE) win.webContents.once('did-finish-load',async()=>{
     try {

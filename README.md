@@ -10,6 +10,8 @@ ScoreSprout 是一款优先面向 Windows 的本地 MIDI 乐谱桌面软件。�
 
 需要 Windows 10/11、Node.js 22 或更新版本，以及 pnpm 11。首次安装需要联网下载依赖和 Electron，之后处理歌曲不需要网络。
 
+**快捷启动：**下载项目后，双击根目录的 [`启动 ScoreSprout.cmd`](启动%20ScoreSprout.cmd)。首次运行会自动安装依赖，之后双击即可直接打开应用。Node.js / pnpm 尚未安装时，启动窗口会提示安装。
+
 在项目目录打开 PowerShell：
 
 ```powershell
@@ -19,6 +21,8 @@ corepack pnpm start
 ```
 
 如果已安装 pnpm，可以直接运行 `pnpm install` 和 `pnpm start`。本项目是可直接运行的 Electron 桌面应用；第一版暂未制作 Windows 安装包。
+
+想找 MIDI 文件可访问 [MidiShow](https://www.midishow.com/)、[BitMidi](https://bitmidi.com/)、[FreeMIDI](https://freemidi.org/) 或 [VGMusic](https://www.vgmusic.com/)。请下载 `.mid` / `.midi` 文件后再导入，并遵守各站及作品的使用条款。应用不从这些网站直接抓取文件；VSQX 等声库工程文件暂不支持导入。
 
 ## 使用
 
@@ -69,6 +73,8 @@ ScoreSprout is a local desktop app, built with Windows in mind, that turns MIDI 
 
 Requires Windows 10/11, Node.js 22 or newer, and pnpm 11. The first installation downloads dependencies and Electron; importing and arranging music works offline afterward. In PowerShell, from the project directory:
 
+**Quick launch:** double-click [`启动 ScoreSprout.cmd`](启动%20ScoreSprout.cmd) in the project root. It installs dependencies on the first run, then opens the app directly on later runs. If Node.js or pnpm is missing, the launcher displays an installation hint.
+
 ```powershell
 corepack enable
 corepack pnpm install
@@ -76,6 +82,8 @@ corepack pnpm start
 ```
 
 If pnpm is already installed, use `pnpm install` and `pnpm start`. This is a runnable Electron application; a Windows installer is not included in the first release.
+
+You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](https://bitmidi.com/), [FreeMIDI](https://freemidi.org/), and [VGMusic](https://www.vgmusic.com/). Download a `.mid` or `.midi` file and import it into ScoreSprout, following each site's and work's terms. The app does not fetch files from those sites. VSQX and other vocal-synth project formats are not supported.
 
 ### Use
 

@@ -1,0 +1,35 @@
+.midi-sources {
+  max-width: 330px;
+  flex: none;
+  margin-left: 24px;
+  padding: 12px 14px;
+  border: 1px solid #d7e6d7;
+  border-radius: 12px;
+  background: #edf6eb;
+  color: #416d47;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.midi-source-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 11px;
+  margin-top: 6px;
+}
+
+.midi-source-links a {
+  color: #327646;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.midi-source-links a:hover,
+.midi-source-links a:focus-visible {
+  text-decoration: underline;
+}
+
+@media (max-width: 1100px) {
+  .topbar { flex-wrap: wrap; gap: 18px; }
+  .midi-sources { width: 100%; max-width: none; margin-left: 0; }
+}
