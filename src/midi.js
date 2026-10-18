@@ -235,11 +235,16 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
 
 function versionToMidi(version) {
   const parts = version.parts?.length ? version.parts : [{ instrument:version.instrument,notes:version.notes,trackName:version.trackName }];
+  const midiParts = parts.flatMap(part => {
+    if(part.instrument!=='piano'||!part.notes.some(note=>note.hand==='left'||note.hand==='right'))return [part];
+    return ['right','left'].map(hand=>({instrument:'piano',trackName:`${part.trackName||'钢琴'}（${hand==='right'?'右手':'左手'}）`,
+      notes:part.notes.filter(note=>(note.hand||(note.pitch<60?'left':'right'))===hand)})).filter(item=>item.notes.length);
+  });
   let pitchedChannel = 0;
-  const tracks = parts.map((part,index) => {
+  const tracks = midiParts.map((part,index) => {
     const channel = part.instrument === 'drums' ? 9 : pitchedChannel++;
     const events = [{ tick:0,order:0,type:'trackName',
-      text:encodeText(parts.length === 1 ? `${version.title} · ${DIFFICULTIES[version.difficulty]}` : `${INSTRUMENTS[part.instrument]} · ${part.trackName}`) },
+      text:encodeText(midiParts.length === 1 ? `${version.title} · ${DIFFICULTIES[version.difficulty]}` : `${INSTRUMENTS[part.instrument]} · ${part.trackName}`) },
       { tick:0,order:0,type:'programChange',channel,programNumber:{piano:0,guitar:24,bass:33,drums:0}[part.instrument] }];
     if (index === 0) events.push(
       { tick:0,order:0,type:'setTempo',microsecondsPerBeat:Math.round(60000000/version.bpm) },

@@ -86,8 +86,8 @@ function showSource(source) {
   $('emptyState').classList.add('hidden'); $('workspace').classList.remove('hidden'); $('result').classList.add('hidden');
   $('songTitle').value=source.title; $('pageTitle').textContent=source.title;
   $('pageSubtitle').textContent=source.inputType==='mp3' ?
-    'SheetSage2 提取旋律、和弦及节拍。可合并两条旋律生成双手钢琴谱，也可生成其他乐器的练习编配。' :
-    '选择轨道和难度，生成适合自己的乐谱。';
+    'SheetSage2 提取旋律、和弦及节拍。钢琴谱可合并两条旋律并添加指法，也可生成其他乐器的练习编配。' :
+    '选择轨道和难度；钢琴谱可分配左右手并添加指法。';
   $('selectionHelp').textContent=source.inputType==='mp3' ?
     '钢琴可勾选两条旋律；吉他使用旋律与和弦；贝斯、鼓根据和弦或节拍生成练习编配。' :
     '同乐器合并为一个声部，不同乐器组成合奏谱。';
@@ -166,7 +166,10 @@ async function renderVersion(data) {
   const v=data.version; player.load(v.notes,v.bpm,v.instrument); $('playBtn').textContent='▶';
   $('result').classList.remove('hidden');
   $('resultTitle').textContent=`${v.title} · ${levels[v.difficulty]}`;
-  $('resultDetails').textContent=`${names[v.instrument]} · ${v.trackName} · ${v.notes.length} 个音符${v.provenance?' · '+v.provenance:''}`;
+  const pianoInfo=v.pianoProcessing;
+  const handLabel={pm2s:'PM2S 左右手','mp3-roles':'人声/器乐左右手','existing-hands':'保留原有左右手','pitch-short':'短曲按音高分手','pitch-fallback':'按音高回退分手',pitch:'按音高分谱'};
+  const pianoDescription=pianoInfo ? ` · ${handLabel[pianoInfo.handMethod]||'左右手已分配'} · ${pianoInfo.fingeringCount?`PianoPlayer 指法 ${pianoInfo.fingeringCount} 处`:'无指法'}` : '';
+  $('resultDetails').textContent=`${names[v.instrument]} · ${v.trackName} · ${v.notes.length} 个音符${pianoDescription}${v.provenance?' · '+v.provenance:''}${pianoInfo?.warning?' · '+pianoInfo.warning:''}`;
   $('playingInstrument').textContent=names[v.instrument];
   const target=$('score'); target.replaceChildren();
   if (!window.opensheetmusicdisplay) throw new Error('乐谱渲染组件未加载。请重新安装依赖。');
@@ -232,7 +235,9 @@ async function generate() {
       state.source.inputType==='mp3'?state.mp3Instrument:null);
     await window.scoresprout.renameSong(state.source.id,title);
     state.source.title=title; $('pageTitle').textContent=title;
-    await refreshLibrary(); await renderVersion(data); notice('乐谱已保存到本地音乐库。','success');
+    await refreshLibrary(); await renderVersion(data);
+    notice(data.version.pianoProcessing?.warning || '乐谱已保存到本地音乐库。',
+      data.version.pianoProcessing?.warning ? '' : 'success');
   } finally {
     $('generateBtn').disabled=false; $('generateBtn').innerHTML='生成乐谱 <span>→</span>';
   }

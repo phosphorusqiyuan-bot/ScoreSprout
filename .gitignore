@@ -6,3 +6,5 @@ node_modules/
 .smoke-exports/
 *.log
 .sheetsage2-runtime/
+.piano-runtime/
+__pycache__/

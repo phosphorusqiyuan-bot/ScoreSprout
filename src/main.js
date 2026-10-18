@@ -7,6 +7,7 @@ const { versionToMusicXML } = require('./musicxml');
 const { deleteVersion } = require('./library');
 const { transcribeWithSheetSage } = require('./sheetsage2');
 const { transcribedNotesToMidi } = require('./audio-import');
+const { enhancePianoVersion, renameMusicXML } = require('./piano');
 const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
 const TRANSCRIPTION_REVISION='sheetsage2-arrangements-v1';
 
@@ -157,7 +158,9 @@ app.whenReady().then(() => {
       if(!fs.existsSync(file))continue;
       const version=JSON.parse(fs.readFileSync(file,'utf8'));version.title=m.title;item.title=m.title;
       writeJSON(file,version);
-      fs.writeFileSync(path.join(dir,`${item.id}.musicxml`),versionToMusicXML(version),'utf8');
+      const xmlPath=path.join(dir,`${item.id}.musicxml`);
+      const previousXml=fs.existsSync(xmlPath)?fs.readFileSync(xmlPath,'utf8'):versionToMusicXML(version);
+      fs.writeFileSync(xmlPath,renameMusicXML(previousXml,version),'utf8');
       fs.writeFileSync(path.join(dir,`${item.id}.mid`),versionToMidi(version));
     }
     writeJSON(manifestPath(id),m); return m.title;
@@ -167,7 +170,7 @@ app.whenReady().then(() => {
     if (!track) throw new Error('轨道不存在。');
     return { bpm:source.bpm, instrument:track.detected, notes:track.notes.map(n=>({ ...n,start:n.start*480/source.sourcePpq,duration:n.duration*480/source.sourcePpq })).slice(0,1500) };
   }));
-  ipcMain.handle('generate-version', wrap((id,trackIds,choice,difficultyOrTitle,titleOrAssignments,manual) => {
+  ipcMain.handle('generate-version', wrap(async (id,trackIds,choice,difficultyOrTitle,titleOrAssignments,manual) => {
     const {manifest,source} = ensureSource(id);
     const multiple = Array.isArray(trackIds);
     const instrument = multiple ? (source.inputType==='mp3' ? manual||'piano' : 'auto') : choice;
@@ -175,13 +178,14 @@ app.whenReady().then(() => {
     const title = multiple ? difficultyOrTitle : titleOrAssignments;
     const assignments = multiple ? titleOrAssignments || {} : manual;
     const version = generateVersion(source,trackIds,instrument,difficulty,title,assignments);
+    const {musicxml} = await enhancePianoVersion(version,source.inputType);
     manifest.title = version.title;
     const key = version.trackIds.length === 1 ? `${version.trackId}|${version.instrument}|${difficulty}` :
       `${version.instrument}|${version.trackIds.slice().sort().join('|')}|${Object.entries(version.assignments).sort().map(([id,value])=>`${id}:${value}`).join('|')}|${difficulty}`;
     const variantId = `${version.instrument}-${difficulty}-${crypto.createHash('sha256').update(key).digest('hex').slice(0,12)}`;
     const dir = path.join(songDir(id),'variants'); fs.mkdirSync(dir,{recursive:true});
     writeJSON(path.join(dir,`${variantId}.json`),version);
-    fs.writeFileSync(path.join(dir,`${variantId}.musicxml`),versionToMusicXML(version),'utf8');
+    fs.writeFileSync(path.join(dir,`${variantId}.musicxml`),musicxml,'utf8');
     fs.writeFileSync(path.join(dir,`${variantId}.mid`),versionToMidi(version));
     const entry = { id:variantId, songId:id, title:version.title, instrument:version.instrument, difficulty,
       trackId:version.trackId,trackIds:version.trackIds,assignments:version.assignments,
