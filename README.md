@@ -12,6 +12,8 @@ ScoreSprout 是一款优先面向 Windows 的本地 MIDI 乐谱桌面软件。�
 
 **快捷启动：**下载项目后，双击根目录的 [`启动 ScoreSprout.cmd`](启动%20ScoreSprout.cmd)。首次运行会自动安装依赖，之后双击即可直接打开应用。Node.js / pnpm 尚未安装时，启动窗口会提示安装。
 
+为兼容本机受限的图形环境，快捷启动使用 `--disable-gpu --no-sandbox`。若系统可正常启动 Electron，也可运行下方的 `pnpm start`，保留 Chromium 沙箱。
+
 在项目目录打开 PowerShell：
 
 ```powershell
@@ -74,6 +76,8 @@ ScoreSprout is a local desktop app, built with Windows in mind, that turns MIDI 
 Requires Windows 10/11, Node.js 22 or newer, and pnpm 11. The first installation downloads dependencies and Electron; importing and arranging music works offline afterward. In PowerShell, from the project directory:
 
 **Quick launch:** double-click [`启动 ScoreSprout.cmd`](启动%20ScoreSprout.cmd) in the project root. It installs dependencies on the first run, then opens the app directly on later runs. If Node.js or pnpm is missing, the launcher displays an installation hint.
+
+For compatibility with restricted graphics environments, the quick launcher uses `--disable-gpu --no-sandbox`. On systems where Electron starts normally, use `pnpm start` to retain the Chromium sandbox.
 
 ```powershell
 corepack enable
