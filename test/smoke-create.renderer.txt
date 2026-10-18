@@ -1,0 +1,22 @@
+(async()=>{
+  const source=await window.scoresprout.importMidi(), outcomes=[];
+  if(source.tracks.length!==4)throw Error(`expected 4 tracks, got ${source.tracks.length}`);
+  for(const track of source.tracks){
+    const preview=await window.scoresprout.previewTrack(source.id,track.id);
+    if(!preview.notes.length)throw Error('empty preview');
+    for(const difficulty of ['full','intermediate','beginner']){
+      const generated=await window.scoresprout.generate(source.id,track.id,track.detected,difficulty,source.title,false);
+      const holder=document.createElement('div');holder.style.width='1100px';document.body.append(holder);
+      const osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay(holder,{backend:'svg',autoResize:false,drawTitle:false});
+      await osmd.load(generated.musicxml);osmd.render();
+      if(!holder.querySelector('svg'))throw Error(`score not rendered: ${track.detected} ${difficulty}`);
+      const midi=await window.scoresprout.exportVersion(source.id,generated.id,'mid');
+      const xml=await window.scoresprout.exportVersion(source.id,generated.id,'musicxml');
+      outcomes.push({instrument:track.detected,difficulty,notes:generated.version.notes.length,svg:true,midi,xml});holder.remove();
+    }
+  }
+  await window.scoresprout.renameSong(source.id,'ScoreSprout 重命名测试');
+  const library=await window.scoresprout.listLibrary();
+  if(library.some(v=>v.title!=='ScoreSprout 重命名测试'))throw Error('rename did not update library');
+  return {source:source.id,outcomes,library:library.length};
+})()

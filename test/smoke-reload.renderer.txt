@@ -1,0 +1,15 @@
+(async()=>{
+  const library=await window.scoresprout.listLibrary();
+  if(library.length!==12)throw Error(`library missing versions: ${library.length}`);
+  const item=library.find(v=>v.instrument==='piano'&&v.difficulty==='full');if(!item)throw Error('piano version missing');await openLibrary(item);
+  if($('resultTitle').textContent!=='ScoreSprout 重命名测试 · 完整版')throw Error('renamed title did not persist in version');
+  if(!$('score').querySelector('svg'))throw Error('saved score did not render');
+  const p=new ScorePlayer(()=>{},()=>{}), loaded=await window.scoresprout.loadVersion(item.songId,item.id);
+  p.load(loaded.version.notes,loaded.version.bpm,loaded.version.instrument);
+  await p.play();for(let i=0;i<20&&p.ctx.currentTime-p.base<.03;i++)await new Promise(resolve=>setTimeout(resolve,50));
+  if(!p.playing)throw Error('play failed');
+  p.pause();if(p.playing||p.position<=0)throw Error(`pause failed: position=${p.position} ctx=${p.ctx.currentTime} base=${p.base} state=${p.ctx.state} duration=${p.duration}`);
+  p.seek(p.duration/2);if(Math.abs(p.position-p.duration/2)>.01)throw Error('seek failed');
+  await p.play();p.stop();if(p.position!==0||p.playing)throw Error('stop failed');
+  return {library:library.length,loaded:item.id,svg:true,playbackControls:true};
+})()

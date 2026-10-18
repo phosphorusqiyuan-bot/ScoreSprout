@@ -1,0 +1,7 @@
+node_modules/
+.pnpm-store/
+.electron-cache/
+.smoke-*/
+.smoke-data/
+.smoke-exports/
+*.log

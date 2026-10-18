@@ -1,0 +1,21 @@
+{
+  "name": "scoresprout",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "description": "本地 MIDI 简化乐谱桌面软件",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "samples": "node scripts/generate-samples.js",
+    "smoke": "node scripts/smoke.js"
+  },
+  "dependencies": {
+    "midi-file": "^1.2.4",
+    "opensheetmusicdisplay": "^1.9.4"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0"
+  }
+}
