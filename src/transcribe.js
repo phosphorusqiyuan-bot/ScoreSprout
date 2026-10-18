@@ -33,6 +33,15 @@ function fftMagnitude(input) {
 }
 function dominantPitches(magnitudes,sampleRate,fftSize) {
   const binHz=sampleRate/fftSize, score=[],fundamental=[];
+  // Broadband hits are often louder than notes, but lack a stable harmonic spectrum.
+  let sum=0,logSum=0,count=0,peakBin=0;
+  for(let bin=Math.ceil(55/binHz);bin<Math.min(magnitudes.length,Math.floor(5000/binHz));bin++){
+    const value=magnitudes[bin]+1e-8;
+    sum+=value;logSum+=Math.log(value);count++;peakBin=Math.max(peakBin,value);
+  }
+  const mean=sum/count;
+  const peakContrast=peakBin/mean;
+  if(!mean||peakContrast<8||(Math.exp(logSum/count)/mean>.48&&peakContrast<15))return [];
   const peakAt=frequency=>{
     const center=Math.round(frequency/binHz);
     let peak=0;
@@ -53,11 +62,25 @@ function dominantPitches(magnitudes,sampleRate,fftSize) {
   if(!maximum||!maximumFundamental)return [];
   const candidates=[];
   for(let pitch=TRANSCRIBE_MIN_PITCH;pitch<=TRANSCRIBE_MAX_PITCH;pitch++){
-    if(score[pitch]<maximum*.39||fundamental[pitch]<maximumFundamental*.19)continue;
+    if(score[pitch]<maximum*.43||fundamental[pitch]<maximumFundamental*.22)continue;
     if(score[pitch]<score[pitch-1]||score[pitch]<score[pitch+1])continue;
     candidates.push({pitch,strength:score[pitch]});
   }
-  return candidates.sort((a,b)=>b.strength-a.strength).slice(0,4);
+  candidates.sort((a,b)=>b.strength-a.strength);
+  const chosen=[];
+  for(const candidate of candidates){
+    // A strong lower note commonly creates octave/fifth spectral peaks. Keep an
+    // upper note when its own fundamental is substantial, as in a real chord.
+    const harmonicOfLower=chosen.some(lower=>{
+      const interval=candidate.pitch-lower.pitch;
+      return [12,19,24].includes(interval) &&
+        score[lower.pitch]>candidate.strength*1.5 &&
+        fundamental[lower.pitch]>fundamental[candidate.pitch]*1.55;
+    });
+    if(!harmonicOfLower)chosen.push(candidate);
+    if(chosen.length===4)break;
+  }
+  return chosen;
 }
 function resampleAudio(audioBuffer) {
   const rate=audioBuffer.sampleRate, channels=audioBuffer.numberOfChannels;
@@ -90,7 +113,7 @@ async function transcribeSamples(samples,sampleRate=TRANSCRIBE_SAMPLE_RATE,onPro
     if(!note)return;
     const end=Math.min(samples.length/sampleRate,(lastActive+1)*TRANSCRIBE_HOP/sampleRate);
     const duration=end-note.start;
-    if(duration>=.1)notes.push({pitch,start:note.start,duration,velocity:Math.round(72+Math.min(30,note.strength*20))});
+    if(duration>=.17)notes.push({pitch,start:note.start,duration,velocity:Math.round(72+Math.min(30,note.strength*20))});
     active.delete(pitch);
   }
   for(let frame=0;frame<frameCount;frame++){

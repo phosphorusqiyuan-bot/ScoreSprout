@@ -28,7 +28,7 @@ corepack pnpm start
 
 ## 使用
 
-1. 点击「导入 MIDI 文件」，或点击「导入 MP3 并转写」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。
+1. 点击「导入 MIDI 文件」，或点击「导入 MP3 并转写」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。如果以前导入的 MP3 含有杂音符，打开旧乐谱后点击「重新转写原始 MP3」；新版结果会另存，旧乐谱保留。
 2. 查看速度、拍号、调号和轨道列表，修改歌曲名。勾选一条或多条有音符的轨道；每条轨道都可单独试听，未识别的轨道需手动指定乐器。MP3 转写结果始终标为未识别乐器。
 3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。已识别的乐器轨道不能冒充另一种乐器。
 4. 在结果区域播放、暂停、停止或拖动进度。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
@@ -47,7 +47,7 @@ corepack pnpm test
 corepack pnpm smoke
 ```
 
-`smoke` 会启动真正的 Electron 应用六次：前四次验证 MIDI 生成、导出、播放、删除与重启读取；后两次用真实 MP3 验证解码、音符转写、乐器指定、谱面渲染、MIDI 导出及重启读取。结果和导出文件位于项目下自动创建的 `.smoke-*` 目录。测试音频 `samples/440hz-test.mp3` 来自 [badgerodon/mp3](https://github.com/badgerodon/mp3) 的 440 Hz 正弦波样例（MIT License）。
+`smoke` 会启动真正的 Electron 应用七次：前四次验证 MIDI 生成、导出、播放、删除与重启读取；后三次用真实 MP3 验证解码、单音去杂、旧转写记录升级且保留旧谱、乐器指定、谱面渲染、MIDI 导出及重启读取。结果和导出文件位于项目下自动创建的 `.smoke-*` 目录。测试音频 `samples/440hz-test.mp3` 来自 [badgerodon/mp3](https://github.com/badgerodon/mp3) 的 440 Hz 正弦波样例（MIT License）。
 
 ## 技术选择
 
@@ -55,7 +55,7 @@ corepack pnpm smoke
 - [midi-file](https://github.com/carter-thaxton/midi-file)：读写标准 MIDI 事件；按轨道、通道与 Program Change 拆分音符。
 - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay)：把生成的 MusicXML 在应用内渲染为五线谱。
 - Web Audio API：本地合成钢琴、拨弦吉他、贝斯与鼓音色，按生成音符调度播放。
-- 浏览器自带的 MP3 解码器与本地频谱分析：从清晰的音频中估计持续音高和时值，再写成标准 MIDI。
+- 浏览器自带的 MP3 解码器与本地频谱分析：结合频谱集中度、泛音抑制和最短持续时间过滤短促杂音，再将估计的音高及时值写成标准 MIDI。
 
 应用主进程负责本地文件访问；渲染进程通过受限的 preload API 与主进程通信。导入和生成不向外部服务发送数据。
 
@@ -67,7 +67,7 @@ corepack pnpm smoke
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
 - 暂不导出 PDF，也未制作安装包。可将 MusicXML 交给 MuseScore 等工具继续编辑或导出 PDF。
 - 只处理标准 PPQ MIDI。SMPTE 时间格式暂不支持；极长或非常复杂的文件可能需要人工整理。
-- MP3 转写目前是基础频谱分析，适合独奏、清晰旋律和简单和弦。完整混音中人声、伴奏及泛音会互相干扰；不会自动分离乐器或生成可信的鼓轨。转写谱暂以 120 BPM、4/4 记谱，调号未知；最多处理 25 MB、10 分钟。请试听并核对结果。
+- MP3 转写适合独奏、清晰旋律和简单和弦。新版会减少鼓点、宽带噪声和泛音造成的伪音符，但过短的真实装饰音也可能被过滤；完整混音中的人声与伴奏仍可能互相干扰。不会自动分离乐器或生成可信的鼓轨。转写谱暂以 120 BPM、4/4 记谱，调号未知；最多处理 25 MB、10 分钟。请试听并核对结果。
 - 网易云音乐、B 站等链接导入和更准确的多乐器音频识别属于后续扩展方向，当前不接入。
 
 ## English
@@ -94,7 +94,7 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 
 ### Use
 
-1. Click **导入 MIDI 文件** (Import MIDI file) or **导入 MP3 并转写** (Import and transcribe MP3). The app copies the file to its local library without changing the original. For an MP3, **导出转写 MIDI** exports the raw transcription immediately.
+1. Click **导入 MIDI 文件** (Import MIDI file) or **导入 MP3 并转写** (Import and transcribe MP3). The app copies the file to its local library without changing the original. For an MP3, **导出转写 MIDI** exports the raw transcription immediately. For an older noisy import, open its score and click **重新转写原始 MP3** (Retranscribe original MP3). The improved transcription is saved separately; existing scores remain available.
 2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. Select one or more tracks with notes. Each track has its own preview; assign the instrument of any unidentified track manually. MP3 transcriptions are always marked as unidentified.
 3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). A recognized instrument track cannot be relabeled as another instrument.
 4. Play, pause, stop, or seek through the result. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
@@ -113,7 +113,7 @@ corepack pnpm test
 corepack pnpm smoke
 ```
 
-The smoke test launches the Electron app for MIDI generation, rendering, export, playback and deletion, then imports a real MP3, transcribes it, assigns an instrument, renders a score, exports MIDI, and checks persistence after restart. Outputs are written to a `.smoke-*` directory in the project. The 440 Hz test MP3 comes from [badgerodon/mp3](https://github.com/badgerodon/mp3) (MIT License).
+The smoke test launches the Electron app for MIDI generation, rendering, export, playback and deletion, then imports a real MP3, verifies noise reduction and legacy transcription upgrade without losing the old score, assigns an instrument, renders a score, exports MIDI, and checks persistence after restart. Outputs are written to a `.smoke-*` directory in the project. The 440 Hz test MP3 comes from [badgerodon/mp3](https://github.com/badgerodon/mp3) (MIT License).
 
 ### Technology
 
@@ -121,7 +121,7 @@ The smoke test launches the Electron app for MIDI generation, rendering, export,
 - [midi-file](https://github.com/carter-thaxton/midi-file) reads and writes standard MIDI events. Notes are separated by track, channel, and Program Change.
 - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) renders generated MusicXML as staff notation inside the app.
 - The Web Audio API synthesizes piano, plucked guitar, bass, and drum sounds locally from the generated notes.
-- Chromium's MP3 decoder and local spectral analysis estimate pitches and note lengths in clear audio, then write a standard MIDI file.
+- Chromium's MP3 decoder and local spectral analysis estimate pitches and note lengths. Spectral contrast, harmonic suppression, and a minimum note duration reduce spurious notes before writing MIDI.
 
 The main process handles local file access; the renderer communicates through a restricted preload API. Importing and generating do not send song data to an external service.
 
@@ -133,5 +133,5 @@ The main process handles local file access; the renderer communicates through a 
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
 - PDF export and a packaged installer are not included. Open the MusicXML in MuseScore or another notation editor to refine it or export a PDF.
 - Only standard PPQ MIDI is supported. SMPTE timing is not supported, and very long or complex files may need manual cleanup.
-- MP3 transcription is a basic spectral estimate suited to solo instruments, clear melodies, and simple chords. Vocals, accompaniment, and harmonics in a full mix can interfere. The app does not separate instruments or infer a reliable drum part. Transcriptions use an assumed 120 BPM and 4/4, with an unknown key. The current limit is 25 MB and 10 minutes. Preview and check the result.
+- MP3 transcription suits solo instruments, clear melodies, and simple chords. The improved filter reduces false notes from drums, broadband noise, and harmonics, but may omit very short real ornaments. Vocals and accompaniment in a full mix can still interfere. The app does not separate instruments or infer a reliable drum part. Transcriptions use an assumed 120 BPM and 4/4, with an unknown key. The current limit is 25 MB and 10 minutes. Preview and check the result.
 - Importing links from NetEase Cloud Music, Bilibili, or other sites, and more accurate multi-instrument audio recognition, remain future extensions.

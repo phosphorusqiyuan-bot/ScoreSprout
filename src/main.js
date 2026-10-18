@@ -7,6 +7,7 @@ const { versionToMusicXML } = require('./musicxml');
 const { deleteVersion } = require('./library');
 const { transcribedNotesToMidi } = require('./audio-import');
 const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
+const TRANSCRIPTION_REVISION='spectral-v2';
 
 let libraryRoot;
 let pendingAudio=null;
@@ -29,6 +30,18 @@ function ensureSource(id) {
     source.warnings.unshift('MP3 转写只估计音高与节奏，不能识别原曲中的乐器或分离鼓声。请试听并手动指定乐器。速度暂按 120 BPM 记谱。');
   }
   return { manifest, source };
+}
+function prepareAudio(bytes,filename,title) {
+  // A new revision creates a separate source, so arrangements made from an older
+  // transcription remain available when the same MP3 is processed again.
+  const id=crypto.createHash('sha256').update(bytes).update(TRANSCRIPTION_REVISION).digest('hex').slice(0,24);
+  if(fs.existsSync(manifestPath(id))){
+    const {manifest,source}=ensureSource(id);
+    if(manifest.sourceType==='mp3')return {existing:true,source:{id,...summary(source)}};
+  }
+  const token=crypto.randomUUID();
+  pendingAudio={token,id,filename,bytes,title};
+  return {token,filename,bytes:Uint8Array.from(bytes)};
 }
 function wrap(handler) { return async (_event,...args) => { try { return { ok:true, data:await handler(...args) }; } catch (e) { return { ok:false, error:e.message || String(e) }; } }; }
 
@@ -60,18 +73,20 @@ app.whenReady().then(() => {
     const size=fs.statSync(file).size;
     if(size>25*1024*1024)throw new Error('MP3 超过 25 MB，请先压缩或裁剪。');
     if(size<100)throw new Error('MP3 文件为空或已损坏。');
-    const bytes=fs.readFileSync(file),id=crypto.createHash('sha256').update(bytes).digest('hex').slice(0,24);
-    if(fs.existsSync(manifestPath(id))){
-      const {manifest,source}=ensureSource(id);
-      if(manifest.sourceType==='mp3')return {existing:true,source:{id,...summary(source)}};
-    }
-    const token=crypto.randomUUID();
-    pendingAudio={token,id,filename:path.basename(file),bytes};
-    return {token,filename:path.basename(file),bytes:Uint8Array.from(bytes)};
+    const bytes=fs.readFileSync(file);
+    return prepareAudio(bytes,path.basename(file));
+  }));
+  ipcMain.handle('retranscribe-audio',wrap(id=>{
+    pendingAudio=null;
+    const manifest=readManifest(id);
+    if(manifest.sourceType!=='mp3')throw new Error('只有 MP3 导入的曲目可以重新转写。');
+    const file=path.join(songDir(id),'original.mp3');
+    if(!fs.existsSync(file))throw new Error('找不到保存的原始 MP3，请重新导入文件。');
+    return prepareAudio(fs.readFileSync(file),manifest.audioFilename||`${manifest.title}.mp3`,manifest.title);
   }));
   ipcMain.handle('save-transcription', wrap((token,notes) => {
     if(!pendingAudio||pendingAudio.token!==token)throw new Error('MP3 导入已过期，请重新选择文件。');
-    const {id,filename,bytes}=pendingAudio;
+    const {id,filename,bytes,title}=pendingAudio;
     const midi=transcribedNotesToMidi(notes);
     const source=analyzeMidi(midi,`${path.parse(filename).name}.mid`);
     if(!source.tracks.length)throw new Error('转写结果没有可用音符。');
@@ -79,8 +94,9 @@ app.whenReady().then(() => {
     fs.mkdirSync(dir,{recursive:true});
     fs.writeFileSync(path.join(dir,'original.mp3'),bytes);
     fs.writeFileSync(path.join(dir,'original.mid'),midi);
-    const manifest={id,title:path.parse(filename).name||'未命名音频',
+    const manifest={id,title:title||path.parse(filename).name||'未命名音频',
       filename:`${path.parse(filename).name}.mid`,audioFilename:filename,sourceType:'mp3',
+      transcriptionRevision:TRANSCRIPTION_REVISION,
       createdAt:new Date().toISOString(),variants:[]};
     writeJSON(manifestPath(id),manifest);
     pendingAudio=null;

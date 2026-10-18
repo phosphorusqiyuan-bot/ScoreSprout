@@ -88,6 +88,7 @@ function showSource(source) {
   $('tempoValue').textContent=`${source.bpm} BPM${source.inputType==='mp3'?'（估）':''}`;
   $('timeValue').textContent=source.timeSignature.join('/');
   $('exportTranscribedMidi').classList.toggle('hidden',source.inputType!=='mp3');
+  $('retranscribeMp3').classList.toggle('hidden',source.inputType!=='mp3');
   const key=source.keyFifths, namesByFifths=source.keyMode?
     ['A♭','E♭','B♭','F','C','G','D','A','E','B','F♯','C♯','G♯','D♯','A♯']:
     ['C♭','G♭','D♭','A♭','E♭','B♭','F','C','G','D','A','E','B','F♯','C♯'];
@@ -181,13 +182,18 @@ async function importMidi() {
   if (!source) return;
   showSource(source); await refreshLibrary();
 }
-async function importMp3() {
-  const buttons=[$('importMp3Btn'),$('emptyImportMp3Btn')];
+async function processAudioPick(pick) {
+  const buttons=[$('importMp3Btn'),$('emptyImportMp3Btn'),$('retranscribeMp3')];
   buttons.forEach(button=>button.disabled=true);
   try {
-    const picked=await window.scoresprout.selectAudio();
+    const picked=await pick();
     if(!picked)return;
-    if(picked.existing){showSource(picked.source);await refreshLibrary();return;}
+    if(picked.existing){
+      const same=state.source?.id===picked.source.id;
+      showSource(picked.source);await refreshLibrary();
+      if(same)notice('当前已经是新版转写结果；旧乐谱仍保存在音乐库。','success');
+      return;
+    }
     if(!window.ScoreTranscriber)throw new Error('音频转写组件未加载。');
     notice('正在解码 MP3…');
     const output=await window.ScoreTranscriber.transcribeMp3(picked.bytes,
@@ -196,6 +202,11 @@ async function importMp3() {
     showSource(source);await refreshLibrary();
     notice(`已从 MP3 转写 ${output.notes.length} 个音符。请试听后指定乐器；复杂混音可能需要人工修正。`,'success');
   } finally {buttons.forEach(button=>button.disabled=false);}
+}
+async function importMp3() {return processAudioPick(()=>window.scoresprout.selectAudio());}
+async function retranscribeMp3() {
+  if(!state.source||state.source.inputType!=='mp3')return;
+  return processAudioPick(()=>window.scoresprout.retranscribeAudio(state.source.id));
 }
 async function generate() {
   if (!state.source) return;
@@ -233,6 +244,7 @@ function bind() {
   $('emptyImportBtn').addEventListener('click',()=>guarded(importMidi));
   $('importMp3Btn').addEventListener('click',()=>guarded(importMp3));
   $('emptyImportMp3Btn').addEventListener('click',()=>guarded(importMp3));
+  $('retranscribeMp3').addEventListener('click',()=>guarded(retranscribeMp3));
   $('exportTranscribedMidi').addEventListener('click',()=>guarded(async()=>{
     if(!state.source||state.source.inputType!=='mp3')return;
     const file=await window.scoresprout.exportSourceMidi(state.source.id);

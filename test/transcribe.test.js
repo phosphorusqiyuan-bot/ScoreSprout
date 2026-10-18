@@ -20,6 +20,58 @@ test('从持续的单音音频提取音高、开始时间和时值',async()=>{
   assert(a.duration>.8&&a.duration<1.2&&b.duration>.8&&b.duration<1.2);
   assert.equal(progress.at(-1),1);
 });
+test('强泛音不会被误写成高八度或五度的独立音符',async()=>{
+  const rate=22050,samples=new Float32Array(rate*2);
+  for(let i=0;i<samples.length;i++){
+    const time=i/rate;
+    if(time<.25||time>1.75)continue;
+    for(let harmonic=1;harmonic<=5;harmonic++)
+      samples[i]+=.28/harmonic*Math.sin(2*Math.PI*220*harmonic*time);
+  }
+  const notes=await transcribeSamples(samples,rate);
+  assert.deepEqual([...new Set(notes.map(n=>n.pitch))],[57],JSON.stringify(notes));
+  assert(notes[0].duration>1.3);
+});
+test('真实的八度和弦不会被泛音过滤误删',async()=>{
+  const rate=22050,samples=new Float32Array(rate*2);
+  for(let i=0;i<samples.length;i++){
+    const time=i/rate;
+    if(time<.2||time>1.8)continue;
+    samples[i]=.26*Math.sin(2*Math.PI*220*time)+.26*Math.sin(2*Math.PI*440*time);
+  }
+  const notes=await transcribeSamples(samples,rate);
+  assert.deepEqual([...new Set(notes.map(n=>n.pitch))].sort((a,b)=>a-b),[57,69],JSON.stringify(notes));
+});
+test('旋律叠加短促宽带噪声时仍保留长音，过滤杂音符',async()=>{
+  const rate=22050,samples=new Float32Array(rate*3);
+  let seed=317;
+  for(let i=0;i<samples.length;i++){
+    const time=i/rate;
+    const noise=((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/0xffffffff)*2-1;
+    if(time>.25&&time<2.7)samples[i]+=.26*Math.sin(2*Math.PI*440*time);
+    if((time>.7&&time<.82)||(time>1.5&&time<1.64))samples[i]+=.8*noise;
+  }
+  const notes=await transcribeSamples(samples,rate);
+  assert(notes.some(n=>n.pitch===69&&n.duration>2),JSON.stringify(notes));
+  assert.deepEqual([...new Set(notes.map(n=>n.pitch))],[69],JSON.stringify(notes));
+});
+test('清晰的三和弦仍可转写为三个音高',async()=>{
+  const rate=22050,samples=new Float32Array(rate*2);
+  for(let i=0;i<samples.length;i++){
+    const time=i/rate;
+    if(time<.2||time>1.8)continue;
+    for(const pitch of [60,64,67])samples[i]+=.2*Math.sin(2*Math.PI*440*2**((pitch-69)/12)*time);
+  }
+  const notes=await transcribeSamples(samples,rate);
+  assert.deepEqual([...new Set(notes.map(n=>n.pitch))].sort((a,b)=>a-b),[60,64,67],JSON.stringify(notes));
+});
+test('只有宽带噪声时不生成伪 MIDI 音符',async()=>{
+  const rate=22050,samples=new Float32Array(rate*2);
+  let seed=593;
+  for(let i=0;i<samples.length;i++)
+    samples[i]=((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/0xffffffff)*1.2-.6;
+  await assert.rejects(transcribeSamples(samples,rate),/没有检测到可靠的音符/);
+});
 test('转写音符保存为待指定乐器的 MIDI，可继续生成乐谱',()=>{
   const midi=transcribedNotesToMidi([{pitch:69,start:.3,duration:.95,velocity:90},
     {pitch:71,start:1.65,duration:.9,velocity:88}]);
