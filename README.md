@@ -4,7 +4,7 @@
 
 ## 简体中文
 
-ScoreSprout 是一款优先面向 Windows 的本地乐谱桌面软件。导入 `.mid` / `.midi` 后，可选择一条或多条真实存在的轨道及难度，查看五线谱、试听生成版本，并在本机音乐库保存或导出 MusicXML / MIDI。同乐器轨道合并为一个声部；不同乐器轨道生成合奏谱。钢琴谱可使用 PM2S 分配左右手，再用 PianoPlayer 添加指法。MP3 使用 SheetSage2 提取人声旋律、器乐旋律、和弦与节拍：可合并两条旋律生成双手钢琴谱，也可生成吉他、贝斯、鼓练习编配。
+ScoreSprout 是一款优先面向 Windows 的本地乐谱桌面软件。导入 `.mid` / `.midi` 后，可选择一条或多条真实存在的轨道及难度，查看五线谱、试听生成版本，并在本机音乐库保存或导出 MusicXML / MIDI。同乐器轨道合并为一个声部；不同乐器轨道生成合奏谱。钢琴谱可使用 PM2S 分配左右手，再用 PianoPlayer 添加指法。MP3 使用 SheetSage2 提取人声旋律、器乐旋律、和弦与节拍：单旋律可按预测和弦自动编配左手，两条旋律可分别分配到左右手，也可生成吉他、贝斯、鼓练习编配。
 
 ## 安装与启动
 
@@ -32,7 +32,7 @@ corepack pnpm start
 
 1. 点击「导入 MIDI 文件」，或先完成模型安装后点击「MP3 提取旋律（SheetSage2）」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。
 2. 查看速度、拍号、调号和轨道列表，修改歌曲名。MIDI 可勾选多条有音符的轨道、试听并手动指定未识别的乐器。MP3 会显示有音符的人声、器乐旋律轨道；分别试听后可勾选一条或两条，并在「生成乐器」中选择钢琴、吉他、贝斯或鼓。轨道预览统一使用钢琴音色。
-3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。选择的钢琴轨道会先合并成一组音符，再由 PM2S 预测左右手，PianoPlayer 给 MusicXML 标注指法；太短的曲目使用音高回退。MP3 已知的人声/器乐双旋律分配作为约束，单旋律不会凭空生成左手伴奏。吉他使用所选旋律与预测和弦，贝斯使用预测和弦根音，鼓使用预测节拍。结果区会标明这些是练习编配，不是原曲真实分轨。MIDI 已识别的乐器轨道不能冒充另一种乐器。
+3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。选择的 MIDI 钢琴轨道会先合并成一组音符，再由 PM2S 预测左右手，PianoPlayer 给 MusicXML 标注指法；太短的曲目使用音高回退。MP3 只选一条旋律时，右手保留该旋律，左手按预测和弦及节拍编配：新手版以单根音为主，进阶版加入双音，完整版加入三和弦。选两条旋律时仍分别放入左右手。若缺少覆盖旋律的可用和弦，会明确提示并只生成右手。吉他使用所选旋律与预测和弦，贝斯使用预测和弦根音，鼓使用预测节拍。结果区会标明这些是练习编配，不是原曲真实分轨。MIDI 已识别的乐器轨道不能冒充另一种乐器。
 4. 在结果区域播放、暂停、停止或拖动进度。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
 5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。再次选择难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
 6. 点击音乐库条目旁的「删除」或结果区的「删除乐谱」，确认后移除此版本。原始 MIDI、其他版本和已导出的文件会保留；当前打开的版本被删除时，播放会停止，仍可重新生成。
@@ -73,13 +73,13 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
 - 暂不导出 PDF，也未制作安装包。可将 MusicXML 交给 MuseScore 等工具继续编辑或导出 PDF。
 - 只处理标准 PPQ MIDI。SMPTE 时间格式暂不支持；极长或非常复杂的文件可能需要人工整理。
-- SheetSage2 的人声与器乐结果是两条候选旋律，并非分离的音轨或完整伴奏。MP3 双手钢琴谱把器乐旋律移入左手音域，必要时移八度；它不等于原曲钢琴左手和弦伴奏。PM2S 只能给现有音符分手，不能补写缺失的伴奏；单旋律 MP3 保持单手。模型可能错分跨手或复杂和弦，短曲和失衡结果会回退。PianoPlayer 的指法是演奏建议，密集和弦或长音连结处可能无法给每个音都标指法。
+- SheetSage2 的人声与器乐结果是两条候选旋律，并非分离的音轨或完整伴奏。MP3 双旋律钢琴谱把第二条旋律移入左手音域，必要时移八度；单旋律钢琴谱依据预测和弦及节拍**自动编配**左手。二者都不等于原曲钢琴左手转写。缺少可用和弦时单旋律仍只有右手。PM2S 只用于给现有钢琴音符分手，自动编配的左右手固定不再交由 PM2S 改写。模型可能错分跨手或复杂和弦，短曲和失衡结果会回退。PianoPlayer 的指法是演奏建议，密集和弦或长音连结处可能无法给每个音都标指法。
 - MP3 的吉他、贝斯、鼓谱是按预测旋律、和弦与节拍生成的练习编配，**不是原曲吉他、贝斯或鼓的转写**；缺少可用和弦时不能生成贝斯谱，缺少节拍时不能生成鼓谱。模型错认和弦或节拍会影响编配。复杂混音、强伴奏或混响仍可能导致错音和漏音，实际曲目请逐条试听。转写 MIDI 使用模型给出的音符时间，谱面仍由 ScoreSprout 量化；最多处理 25 MB、10 分钟。模型一次按最长 5 分钟窗口分析，长音频、CPU 或显存较小的显卡可能耗时很长或内存不足。旧版 MP3 导入项没有保存和弦与节拍，可重新导入原 MP3 创建新版曲目。
 - 网易云音乐、B 站等链接导入和更准确的多乐器音频识别属于后续扩展方向，当前不接入。
 
 ## English
 
-ScoreSprout is a local desktop app, built with Windows in mind, that turns MIDI tracks into sheet music at a level you can play. Import a `.mid` or `.midi` file, choose one or more tracks and a difficulty, then read and play the generated score. Tracks of the same instrument merge into one part; tracks of different instruments form an ensemble score. Piano scores can use PM2S for hand assignment and PianoPlayer for fingering. MP3 transcription uses SheetSage2 to predict vocal and instrumental melodies, chords, and beats. You can combine two melodies on a grand staff or make practice arrangements for guitar, bass, and drums.
+ScoreSprout is a local desktop app, built with Windows in mind, that turns MIDI tracks into sheet music at a level you can play. Import a `.mid` or `.midi` file, choose one or more tracks and a difficulty, then read and play the generated score. Tracks of the same instrument merge into one part; tracks of different instruments form an ensemble score. Piano scores can use PM2S for hand assignment and PianoPlayer for fingering. MP3 transcription uses SheetSage2 to predict vocal and instrumental melodies, chords, and beats. A single melody can receive an automatically arranged left hand from predicted chords; two melodies can be split across the grand staff. Guitar, bass, and drum practice arrangements are also available.
 
 ### Install and run
 
@@ -105,7 +105,7 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 
 1. Click **导入 MIDI 文件** (Import MIDI file) or **MP3 提取旋律（SheetSage2）** after model setup. The app copies the file to its local library without changing the original. For an MP3, **导出转写 MIDI** exports the raw transcription immediately.
 2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. MIDI tracks can be previewed, selected together, and assigned an instrument when unidentified. MP3 results show vocal and instrumental melody tracks when notes are present. Preview and select one or both, then choose an output instrument. Track previews use piano sound.
-3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). Selected piano notes are combined before PM2S assigns hands; PianoPlayer annotates the resulting MusicXML. Very short passages fall back to a pitch split. For MP3, vocal and instrumental melody roles constrain the split, and a single melody stays a single melody. Guitar combines a selected melody with predicted chords; bass uses chord roots; drums use predicted beats. These are practice arrangements, not transcriptions of the source instruments. A recognized MIDI instrument track cannot be relabeled as another instrument.
+3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). Selected MIDI piano notes are combined before PM2S assigns hands; PianoPlayer annotates the resulting MusicXML. Very short passages fall back to a pitch split. For a single MP3 melody, the right hand keeps the melody and the left hand is arranged from predicted chords and beats; Beginner favors single bass notes, Intermediate adds dyads, and Full adds triads. With two selected melodies, each takes one hand. If no usable chords cover the melody, the app explains why it keeps only the right hand. Guitar combines a selected melody with predicted chords; bass uses chord roots; drums use predicted beats. These are practice arrangements, not transcriptions of the source instruments. A recognized MIDI instrument track cannot be relabeled as another instrument.
 4. Play, pause, stop, or seek through the result. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
 5. Reopen saved versions from the local library, or filter by song, instrument, and difficulty. Generate another difficulty to save another version. Different instruments of the same song have separate internal IDs.
 6. Click **删除** (Delete) beside a library entry or **删除乐谱** (Delete score) in the result panel, then confirm. Only that version is removed; the original MIDI, other versions, and exported files are kept. Deleting the open version stops playback, and you can generate it again from the retained source.
@@ -148,6 +148,6 @@ The main process handles local file access; the renderer communicates through a 
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
 - PDF export and a packaged installer are not included. Open the MusicXML in MuseScore or another notation editor to refine it or export a PDF.
 - Only standard PPQ MIDI is supported. SMPTE timing is not supported, and very long or complex files may need manual cleanup.
-- SheetSage2's vocal and instrumental outputs are melody candidates, not separated stems or full accompaniment. The MP3 piano arrangement shifts the instrumental melody into the left-hand range, sometimes by an octave; it is not the recording's actual piano accompaniment. PM2S can assign existing notes to hands but cannot invent missing accompaniment; a single-melody MP3 remains one-handed. Hand crossings and complex chords can be misclassified, so short or imbalanced passages may fall back. PianoPlayer's fingering is a suggestion and may omit some chord or tied notes.
+- SheetSage2's vocal and instrumental outputs are melody candidates, not separated stems or full accompaniment. With two MP3 melodies, the second is shifted into the left-hand range, sometimes by an octave. With one melody, the left hand is **automatically arranged** from predicted chords and beats. Neither output is a transcription of the recording's original left hand. Without usable chords, the single melody remains right-hand only. PM2S assigns existing MIDI piano notes to hands; it does not rewrite the hands of the generated MP3 accompaniment. Hand crossings and complex chords can be misclassified, so short or imbalanced passages may fall back. PianoPlayer's fingering is a suggestion and may omit some chord or tied notes.
 - MP3 guitar, bass, and drum scores are practice arrangements from predicted melody, chords, and beats, **not transcriptions of the recording's individual instruments**. Bass needs recognizable chords; drums need recognizable beats. Prediction errors affect these arrangements. Strong accompaniment or reverb can cause wrong or missing notes; preview both tracks. MIDI retains the model's note timing; ScoreSprout quantizes the score. MP3 input is limited to 25 MB and 10 minutes. Long files, CPU inference, or small GPUs may be very slow or run out of memory. Older MP3 library entries lack saved chord and beat data; reimport the original MP3 to create a current entry.
 - Importing links from NetEase Cloud Music, Bilibili, or other sites, and more accurate multi-instrument audio recognition, remain future extensions.

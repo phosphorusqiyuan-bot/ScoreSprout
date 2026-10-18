@@ -181,7 +181,7 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
   let arrangement=null;
   if(source.inputType==='mp3'){
     const target=instrument==='auto'?'piano':instrument;
-    arrangement=arrangeMp3(source,tracks,target);
+    arrangement=arrangeMp3(source,tracks,target,difficulty);
     groups.set(target,[{id:'mp3-arrangement',name:arrangement.trackName,notes:arrangement.notes}]);
   }else for (const track of tracks) {
     let target = track.detected;
@@ -214,7 +214,7 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
       const end = Math.round((n.start+n.duration)/grid)*grid;
       const note = { pitch:n.pitch,start,duration:target === 'drums' ? grid : Math.max(grid,end-start),
         velocity:n.velocity,instrument:target,...(n.hand?{hand:n.hand}:{}) };
-      const key = `${start}:${n.pitch}`, previous = unique.get(key);
+      const key = `${start}:${n.pitch}:${target==='piano'?(n.hand||'') : ''}`, previous = unique.get(key);
       if (!previous) unique.set(key,note);
       else { previous.duration=Math.max(previous.duration,note.duration); previous.velocity=Math.max(previous.velocity,note.velocity); }
     }
@@ -229,7 +229,8 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
     trackId:ids[0]||null,trackIds:arrangement?arrangement.trackIds:ids,
     trackName:arrangement?arrangement.trackName:tracks.map(t=>t.name).join(' + '),
     sourceTrack:tracks[0]?.sourceTrack||null,assignments,bpm:source.bpm,
-    ...(arrangement?{provenance:arrangement.provenance}:{}),
+    ...(arrangement?{provenance:arrangement.provenance,
+      ...(arrangement.pianoAccompaniment?{mp3PianoAccompaniment:true}:{})}:{}),
     timeSignature:source.timeSignature,keyFifths:source.keyFifths,keyMode:source.keyMode,ppq,notes,parts };
 }
 

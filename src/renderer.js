@@ -86,10 +86,10 @@ function showSource(source) {
   $('emptyState').classList.add('hidden'); $('workspace').classList.remove('hidden'); $('result').classList.add('hidden');
   $('songTitle').value=source.title; $('pageTitle').textContent=source.title;
   $('pageSubtitle').textContent=source.inputType==='mp3' ?
-    'SheetSage2 提取旋律、和弦及节拍。钢琴谱可合并两条旋律并添加指法，也可生成其他乐器的练习编配。' :
+    'SheetSage2 提取旋律、和弦及节拍。单旋律钢琴谱可自动编配左手；也可合并两条旋律，或生成其他乐器的练习编配。' :
     '选择轨道和难度；钢琴谱可分配左右手并添加指法。';
   $('selectionHelp').textContent=source.inputType==='mp3' ?
-    '钢琴可勾选两条旋律；吉他使用旋律与和弦；贝斯、鼓根据和弦或节拍生成练习编配。' :
+    '钢琴选单旋律时按预测和弦编配左手，选双旋律时分别分配左右手；吉他、贝斯、鼓生成练习编配。' :
     '同乐器合并为一个声部，不同乐器组成合奏谱。';
   $('trackHelp').textContent=source.inputType==='mp3' ?
     '可同时选择人声和器乐旋律；单条旋律也可以生成。' :
@@ -167,7 +167,7 @@ async function renderVersion(data) {
   $('result').classList.remove('hidden');
   $('resultTitle').textContent=`${v.title} · ${levels[v.difficulty]}`;
   const pianoInfo=v.pianoProcessing;
-  const handLabel={pm2s:'PM2S 左右手','mp3-roles':'人声/器乐左右手','existing-hands':'保留原有左右手','pitch-short':'短曲按音高分手','pitch-fallback':'按音高回退分手',pitch:'按音高分谱'};
+  const handLabel={pm2s:'PM2S 左右手','mp3-roles':'人声/器乐左右手','mp3-arrangement':'右手旋律 + 左手自动编配','existing-hands':'保留原有左右手','pitch-short':'短曲按音高分手','pitch-fallback':'按音高回退分手',pitch:'按音高分谱'};
   const pianoDescription=pianoInfo ? ` · ${handLabel[pianoInfo.handMethod]||'左右手已分配'} · ${pianoInfo.fingeringCount?`PianoPlayer 指法 ${pianoInfo.fingeringCount} 处`:'无指法'}` : '';
   $('resultDetails').textContent=`${names[v.instrument]} · ${v.trackName} · ${v.notes.length} 个音符${pianoDescription}${v.provenance?' · '+v.provenance:''}${pianoInfo?.warning?' · '+pianoInfo.warning:''}`;
   $('playingInstrument').textContent=names[v.instrument];

@@ -90,8 +90,9 @@ async function enhancePianoVersion(version, inputType) {
   if (!part?.notes.length) return { musicxml:versionToMusicXML(version), version };
   const runtime = findRuntime();
   if (!runtime) {
-    version.pianoProcessing = {handMethod:'pitch', fingeringCount:0,
-      warning:'尚未安装钢琴分手与指法模型；请双击「安装钢琴分手与指法.cmd」。当前仍按音高分谱。'};
+    version.pianoProcessing = {handMethod:version.mp3PianoAccompaniment?'mp3-arrangement':'pitch', fingeringCount:0,
+      warning:version.mp3PianoAccompaniment?'尚未安装 PianoPlayer，左手自动编配仍可演奏，但暂不显示指法。请双击「安装钢琴分手与指法.cmd」。':
+        '尚未安装钢琴分手与指法模型；请双击「安装钢琴分手与指法.cmd」。当前仍按音高分谱。'};
     return {musicxml:versionToMusicXML(version), version};
   }
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'scoresprout-piano-'));
@@ -99,14 +100,17 @@ async function enhancePianoVersion(version, inputType) {
     const input = path.join(temp, 'notes.json'), output = path.join(temp, 'hands.json');
     fs.writeFileSync(input, JSON.stringify({bpm:version.bpm, ppq:version.ppq, notes:part.notes}), 'utf8');
     let handMethod, handWarning='';
-    try {
-      await runPython(runtime.python, ['hands', input, runtime.weights, output]);
-      const result = JSON.parse(fs.readFileSync(output, 'utf8'));
-      handMethod = applyHandResults(part, result.hands, inputType);
-    } catch (error) {
-      handMethod='pitch';
-      handWarning=`PM2S 分手失败，已按音高分谱：${error.message}`;
-      part.notes.forEach(note => { note.hand=note.hand||(note.pitch<60?'left':'right'); });
+    if(version.mp3PianoAccompaniment)handMethod='mp3-arrangement';
+    else {
+      try {
+        await runPython(runtime.python, ['hands', input, runtime.weights, output]);
+        const result = JSON.parse(fs.readFileSync(output, 'utf8'));
+        handMethod = applyHandResults(part, result.hands, inputType);
+      } catch (error) {
+        handMethod='pitch';
+        handWarning=`PM2S 分手失败，已按音高分谱：${error.message}`;
+        part.notes.forEach(note => { note.hand=note.hand||(note.pitch<60?'left':'right'); });
+      }
     }
     const xml = versionToMusicXML(version);
     const scorePath = path.join(temp, 'score.xml'), annotatedPath = path.join(temp, 'annotated.xml');

@@ -48,12 +48,43 @@ function fitOctave(pitch,low,high){while(pitch<low)pitch+=12;while(pitch>high)pi
 function median(values){const sorted=[...values].sort((a,b)=>a-b);return sorted[Math.floor(sorted.length/2)];}
 function isVocal(track){return /vocal|人声/i.test(track.name);}
 
-function arrangeMp3(source,selected,instrument) {
+function pianoLeftHand(source,chords,beats,melody,difficulty) {
+  const seconds=ticks=>ticks/source.sourcePpq*60/source.bpm;
+  const first=seconds(Math.min(...melody.map(note=>note.start)));
+  const last=seconds(Math.max(...melody.map(note=>note.start+note.duration)));
+  const notes=[];
+  for(const chord of chords){
+    const tones=chordTones(chord.label);
+    const start=Math.max(first,chord.start),end=Math.min(last,chord.end);
+    if(!tones||end-start<.25)continue;
+    const chordBeats=beats.filter(beat=>beat.time>=start-.08&&beat.time<end-.08);
+    const pulses=chordBeats.length ? chordBeats.map(beat=>({time:Math.max(start,beat.time),position:beat.position})) :
+      [{time:start,position:1}];
+    if(pulses[0].time>start+.25)pulses.unshift({time:start,position:1});
+    const root=fitOctave(48+tones.root,43,54);
+    const upper=tones.intervals.slice(1,3).map(interval=>root+interval);
+    const chosen=pulses.filter((pulse,index)=>difficulty==='full'||index===0||
+      (difficulty==='beginner'?pulse.position%2===1:pulse.position===1||pulse.position===3));
+    for(let index=0;index<chosen.length;index++){
+      const pulse=chosen[index],next=chosen[index+1]?.time||end;
+      const length=Math.min(end,next,pulse.time+(difficulty==='beginner'?2:1.5))-pulse.time;
+      if(length<.12)continue;
+      const downbeat=pulse.position===1||index===0;
+      const pitches=difficulty==='beginner'?[root]:difficulty==='intermediate'?
+        (downbeat?[root]:upper):downbeat?[root,...upper]:index%2?[...upper]:[root];
+      for(const pitch of pitches)notes.push({pitch,start:secondsToTicks(source,pulse.time),
+        duration:Math.max(1,secondsToTicks(source,length)),velocity:downbeat?58:48,hand:'left'});
+    }
+  }
+  return notes;
+}
+
+function arrangeMp3(source,selected,instrument,difficulty='full') {
   const analysis=source.audioAnalysis||{};
   const chords=parseChords(analysis.chords),beats=parseBeats(analysis.beats);
   const s=time=>secondsToTicks(source,time);
   const notes=[];
-  let trackName='',provenance='';
+  let trackName='',provenance='',pianoAccompaniment=false;
   if(instrument==='piano'){
     if(!selected.length)throw new Error('钢琴谱请先选择人声或器乐旋律。');
     if(selected.length>2)throw new Error('钢琴谱最多选择人声与器乐两条旋律。');
@@ -67,8 +98,13 @@ function arrangeMp3(source,selected,instrument) {
       trackName=`${right.name}（右手） + ${left.name}（左手）`;
       provenance='SheetSage2 两条旋律的双手改编；左手器乐旋律可能移八度，并非原曲钢琴伴奏。';
     }else{
-      trackName=`${right.name}（右手）`;
-      provenance='SheetSage2 单旋律钢琴谱；未推测原曲左手伴奏。';
+      const accompaniment=pianoLeftHand(source,chords,beats,right.notes,difficulty);
+      notes.push(...accompaniment);
+      pianoAccompaniment=accompaniment.length>0;
+      trackName=pianoAccompaniment?`${right.name}（右手） + 和弦伴奏（左手）`:`${right.name}（右手）`;
+      provenance=pianoAccompaniment?
+        '右手为 SheetSage2 提取的旋律；左手按预测和弦与节拍自动编配，不是原曲左手转写。':
+        'SheetSage2 未识别到覆盖所选旋律的可用和弦，无法可靠编配左手；当前仅保留右手旋律。';
     }
   }else if(instrument==='guitar'){
     const lead=selected.find(isVocal)||selected[0];
@@ -114,7 +150,8 @@ function arrangeMp3(source,selected,instrument) {
     trackName='节拍基础鼓型';
     provenance='按 SheetSage2 节拍生成的基础底鼓、军鼓与踩镲；不是原曲鼓点转写。';
   }else throw new Error('MP3 编配乐器无效。');
-  return {notes,trackName,provenance,trackIds:['bass','drums'].includes(instrument)?[]:selected.map(track=>track.id)};
+  return {notes,trackName,provenance,pianoAccompaniment,
+    trackIds:['bass','drums'].includes(instrument)?[]:selected.map(track=>track.id)};
 }
 
 module.exports={arrangeMp3,parseChords,parseBeats,chordTones};
