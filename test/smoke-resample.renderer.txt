@@ -1,0 +1,11 @@
+(async()=>{
+  const rate=44100,length=rate;
+  async function rms(hz){
+    const buffer=new AudioBuffer({length,numberOfChannels:1,sampleRate:rate});
+    const data=buffer.getChannelData(0);
+    for(let i=0;i<length;i++)data[i]=.5*Math.sin(2*Math.PI*hz*i/rate);
+    const converted=await window.ScoreTranscriber.resampleAudio(buffer);
+    return Math.sqrt(converted.reduce((sum,value)=>sum+value*value,0)/converted.length);
+  }
+  return {tone440:await rms(440),tone15000:await rms(15000)};
+})()

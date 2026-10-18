@@ -1,0 +1,13 @@
+(async()=>{
+  const library=await window.scoresprout.listLibrary();
+  const found={};
+  for(const instrument of ['piano','guitar','bass','drums']){
+    const item=library.find(v=>v.title==='sheetsage2-melody'&&v.instrument===instrument);
+    if(!item)throw Error(`${instrument} SheetSage2 score missing after restart`);
+    await openLibrary(item);
+    if(state.source.inputType!=='mp3'||!$('score').querySelector('svg')||state.mp3Instrument!==instrument)
+      throw Error(`${instrument} SheetSage2 source or score did not reopen`);
+    found[instrument]=item.id;
+  }
+  return {songId:library.find(v=>v.instrument==='piano').songId,persisted:true,found};
+})()

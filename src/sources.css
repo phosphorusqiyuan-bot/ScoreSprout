@@ -39,6 +39,8 @@
 .audio-import-button:hover { background: #31513b; }
 .empty-mp3 { margin-left: 9px; }
 .selection-row #exportTranscribedMidi { margin-left: auto; }
+.mp3-instrument { display:flex;align-items:center;gap:12px;margin-top:18px;font-size:12px;color:#4f7356; }
+.mp3-instrument select { min-width:290px;max-width:100%;padding:9px 12px;border:1px solid #d7e4d5;border-radius:9px;background:#fff;color:#294c32;font:inherit; }
 
 .library-row { display: flex; align-items: center; gap: 3px; }
 .library-row .library-item { flex: 1; min-width: 0; }

@@ -7,11 +7,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "node_modules\electron\dist\electron.exe" (
+set "NEED_INSTALL="
+if not exist "node_modules\electron\dist\electron.exe" set "NEED_INSTALL=1"
+if defined NEED_INSTALL (
   echo Installing ScoreSprout dependencies for the first launch...
   where corepack >nul 2>&1
   if not errorlevel 1 (
-    call corepack pnpm install --frozen-lockfile
+    call corepack pnpm install --frozen-lockfile --store-dir .pnpm-store
   ) else (
     where pnpm >nul 2>&1
     if errorlevel 1 (
@@ -20,7 +22,7 @@ if not exist "node_modules\electron\dist\electron.exe" (
       popd
       exit /b 1
     )
-    call pnpm install --frozen-lockfile
+    call pnpm install --frozen-lockfile --store-dir .pnpm-store
   )
   if errorlevel 1 (
     echo Dependency installation failed. Check your network connection and try again.

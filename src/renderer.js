@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const names = { piano:'钢琴', guitar:'吉他', drums:'鼓', bass:'贝斯', ensemble:'合奏' };
 const levels = { beginner:'新手版', intermediate:'进阶版', full:'完整版' };
 const instruments = ['piano','guitar','bass','drums'];
-const state = { source:null, trackIds:[], assignments:{}, difficulty:'beginner', entry:null, library:[], previewingTrackId:null, pendingDelete:null, deleting:false };
+const state = { source:null, trackIds:[], assignments:{}, mp3Instrument:'piano', difficulty:'beginner', entry:null, library:[], previewingTrackId:null, pendingDelete:null, deleting:false };
 const formatTime = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 const player = new ScorePlayer((now,total) => {
   $('currentTime').textContent=formatTime(now);
@@ -33,7 +33,8 @@ function renderSelection() {
   }
   const selected=state.source.tracks.filter(t=>state.trackIds.includes(t.id));
   const kinds=[...new Set(selected.map(selectedInstrument).filter(Boolean))];
-  $('selectionSummary').textContent=selected.length ?
+  $('selectionSummary').textContent=state.source.inputType==='mp3' ?
+    `已选 ${selected.length} 条旋律 · ${names[state.mp3Instrument]}${['bass','drums'].includes(state.mp3Instrument)?'练习编配':''}` : selected.length ?
     `已选 ${selected.length} 个轨道 · ${kinds.length>1?'合奏':names[kinds[0]]||'待指定乐器'}` : '已选 0 个轨道';
 }
 function renderTracks() {
@@ -44,7 +45,9 @@ function renderTracks() {
     const checkbox=document.createElement('input'); checkbox.type='checkbox'; checkbox.value=t.id;
     checkbox.id=`track-${t.id.replace(/[^a-zA-Z0-9]/g,'-')}`;
     checkbox.addEventListener('change',() => {
-      state.trackIds=checkbox.checked ? [...state.trackIds,t.id] : state.trackIds.filter(id=>id!==t.id);
+      state.trackIds=checkbox.checked ?
+        [...state.trackIds,t.id] :
+        state.trackIds.filter(id=>id!==t.id);
       renderSelection();
     });
     const body=document.createElement('div'); body.className='track-body';
@@ -67,7 +70,7 @@ function renderTracks() {
       });
       row.append(assign);
     } else {
-      const pill=document.createElement('span'); pill.className='pill'; pill.textContent=names[t.detected]; row.append(pill);
+      const pill=document.createElement('span'); pill.className='pill'; pill.textContent=state.source.inputType==='mp3'?'旋律':names[t.detected]; row.append(pill);
     }
     const previewButton=document.createElement('button'); previewButton.type='button';
     previewButton.className='ghost track-preview'; previewButton.dataset.id=t.id; previewButton.dataset.name=t.name;
@@ -78,23 +81,24 @@ function renderTracks() {
   renderSelection();
 }
 function showSource(source) {
-  player.stop(); previewPlayer.stop(); state.source=source; state.entry=null;
+  player.stop(); previewPlayer.stop(); state.source=source; state.entry=null; state.mp3Instrument='piano';
   state.trackIds=source.tracks.length?[source.tracks[0].id]:[]; state.assignments={}; resetPreviewButtons();
   $('emptyState').classList.add('hidden'); $('workspace').classList.remove('hidden'); $('result').classList.add('hidden');
   $('songTitle').value=source.title; $('pageTitle').textContent=source.title;
   $('pageSubtitle').textContent=source.inputType==='mp3' ?
-    '已从 MP3 提取单声部旋律，以钢琴记谱。请先试听，再选择难度。' :
+    'SheetSage2 提取旋律、和弦及节拍。可合并两条旋律生成双手钢琴谱，也可生成其他乐器的练习编配。' :
     '选择轨道和难度，生成适合自己的乐谱。';
   $('selectionHelp').textContent=source.inputType==='mp3' ?
-    'MP3 无法可靠识别乐器，此处只生成钢琴旋律谱。' :
+    '钢琴可勾选两条旋律；吉他使用旋律与和弦；贝斯、鼓根据和弦或节拍生成练习编配。' :
     '同乐器合并为一个声部，不同乐器组成合奏谱。';
   $('trackHelp').textContent=source.inputType==='mp3' ?
-    '提取结果可试听；MP3 的原始乐器无法可靠识别。' :
+    '可同时选择人声和器乐旋律；单条旋律也可以生成。' :
     '每个轨道都能单独试听；未识别的轨道请手动指定乐器';
-  $('tempoValue').textContent=`${source.bpm} BPM${source.inputType==='mp3'?'（估）':''}`;
+  $('tempoValue').textContent=`${source.bpm} BPM${source.inputType==='mp3'?'（记谱基准）':''}`;
   $('timeValue').textContent=source.timeSignature.join('/');
   $('exportTranscribedMidi').classList.toggle('hidden',source.inputType!=='mp3');
-  $('retranscribeMp3').classList.toggle('hidden',source.inputType!=='mp3');
+  $('mp3InstrumentField').classList.toggle('hidden',source.inputType!=='mp3');
+  $('mp3Instrument').value=state.mp3Instrument;
   const key=source.keyFifths, namesByFifths=source.keyMode?
     ['A♭','E♭','B♭','F','C','G','D','A','E','B','F♯','C♯','G♯','D♯','A♯']:
     ['C♭','G♭','D♭','A♭','E♭','B♭','F','C','G','D','A','E','B','F♯','C♯'];
@@ -119,19 +123,15 @@ function renderLibrary() {
     const button=document.createElement('button');
     button.className=`library-item ${state.entry?.id===item.id&&state.entry?.songId===item.songId?'active':''}`;
     const title=document.createElement('strong'), meta=document.createElement('span');
-    title.textContent=item.sourceOnly?`${item.title} · 待生成`:`${item.title} · ${levels[item.difficulty]}`;
-    meta.textContent=item.sourceOnly?'MP3 · 已保存原音频':`${names[item.instrument]||item.instrument} · ${item.trackName}`;
+    title.textContent=`${item.title} · ${levels[item.difficulty]}`;
+    meta.textContent=`${names[item.instrument]||item.instrument} · ${item.trackName}`;
     button.append(title,meta);
     button.addEventListener('click',()=>guarded(()=>openLibrary(item)));
-    row.append(button);
-    if(!item.sourceOnly){
-      const remove=document.createElement('button'); remove.type='button'; remove.className='library-delete';
-      remove.textContent='删除'; remove.dataset.id=item.id;
-      remove.setAttribute('aria-label',`删除 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
-      remove.addEventListener('click',()=>requestDelete(item));
-      row.append(remove);
-    }
-    box.append(row);
+    const remove=document.createElement('button'); remove.type='button'; remove.className='library-delete';
+    remove.textContent='删除'; remove.dataset.id=item.id;
+    remove.setAttribute('aria-label',`删除 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
+    remove.addEventListener('click',()=>requestDelete(item));
+    row.append(button,remove); box.append(row);
   }
 }
 function requestDelete(item) {
@@ -166,7 +166,7 @@ async function renderVersion(data) {
   const v=data.version; player.load(v.notes,v.bpm,v.instrument); $('playBtn').textContent='▶';
   $('result').classList.remove('hidden');
   $('resultTitle').textContent=`${v.title} · ${levels[v.difficulty]}`;
-  $('resultDetails').textContent=`${names[v.instrument]} · ${v.trackName} · ${v.notes.length} 个音符`;
+  $('resultDetails').textContent=`${names[v.instrument]} · ${v.trackName} · ${v.notes.length} 个音符${v.provenance?' · '+v.provenance:''}`;
   $('playingInstrument').textContent=names[v.instrument];
   const target=$('score'); target.replaceChildren();
   if (!window.opensheetmusicdisplay) throw new Error('乐谱渲染组件未加载。请重新安装依赖。');
@@ -178,9 +178,12 @@ async function renderVersion(data) {
 }
 async function openLibrary(item) {
   const source=await window.scoresprout.getSource(item.songId); showSource(source);
-  if(item.sourceOnly)return;
   state.trackIds=(item.trackIds||[item.trackId]).filter(id=>source.tracks.some(t=>t.id===id));
   state.assignments=source.inputType==='mp3'?{}:{...(item.assignments||{})};
+  if(source.inputType==='mp3'){
+    state.mp3Instrument=instruments.includes(item.instrument)?item.instrument:'piano';
+    $('mp3Instrument').value=state.mp3Instrument;
+  }
   if (source.inputType!=='mp3'&&!item.assignments && item.instrument && source.tracks.find(t=>t.id===item.trackId)?.detected==='unknown')
     state.assignments[item.trackId]=item.instrument;
   renderTracks(); state.difficulty=item.difficulty;
@@ -192,42 +195,41 @@ async function importMidi() {
   if (!source) return;
   showSource(source); await refreshLibrary();
 }
-async function processAudioPick(pick) {
-  const buttons=[$('importMp3Btn'),$('emptyImportMp3Btn'),$('retranscribeMp3')];
+async function importMp3() {
+  const buttons=[$('importMp3Btn'),$('emptyImportMp3Btn')];
   buttons.forEach(button=>button.disabled=true);
   try {
-    const picked=await pick();
+    const picked=await window.scoresprout.selectAudio();
     if(!picked)return;
     if(picked.existing){
-      const same=state.source?.id===picked.source.id;
       showSource(picked.source);await refreshLibrary();
-      if(same)notice('当前已经是新版转写结果；旧乐谱仍保存在音乐库。','success');
       return;
     }
     if(!window.ScoreTranscriber)throw new Error('音频转写组件未加载。');
     notice('正在解码 MP3…');
-    const output=await window.ScoreTranscriber.transcribeMp3(picked.bytes,
-      progress=>notice(`正在转写音符… ${Math.round(progress*100)}%`));
-    const source=await window.scoresprout.saveTranscription(picked.token,output.notes);
+    const samples=await window.ScoreTranscriber.decodeMp3(picked.bytes);
+    const stages={loading:'正在加载 SheetSage2 模型…',audio:'正在准备音频…',
+      encoding:'正在分析音频…',decoding:'正在提取旋律…',notation:'正在整理 MIDI…'};
+    const result=await window.scoresprout.transcribeAudio(picked.token,samples,
+      progress=>notice(stages[progress.stage]||'正在转写音符…'));
+    const source=await window.scoresprout.saveTranscription(picked.token);
     showSource(source);await refreshLibrary();
-    notice(`已从 MP3 提取 ${output.notes.length} 个旋律音符。请试听确认，再生成钢琴谱。`,'success');
+    notice(`SheetSage2 提取了人声 ${result.vocalNotes} 个、器乐 ${result.instrumentalNotes} 个音符。可合并两条旋律生成双手钢琴谱；其他乐器是练习编配。`,'success');
   } finally {buttons.forEach(button=>button.disabled=false);}
-}
-async function importMp3() {return processAudioPick(()=>window.scoresprout.selectAudio());}
-async function retranscribeMp3() {
-  if(!state.source||state.source.inputType!=='mp3')return;
-  return processAudioPick(()=>window.scoresprout.retranscribeAudio(state.source.id));
 }
 async function generate() {
   if (!state.source) return;
-  if (!state.trackIds.length) throw new Error('请先选择至少一个有音符的轨道。');
+  if (!state.trackIds.length && !(state.source.inputType==='mp3'&&['bass','drums'].includes(state.mp3Instrument)))
+    throw new Error('请先选择至少一条有音符的旋律或轨道。');
   const title=$('songTitle').value.trim(); if (!title) throw new Error('请填写歌曲名。');
   for (const track of state.source.tracks.filter(t=>state.trackIds.includes(t.id)))
+    if(state.source.inputType!=='mp3')
     if (track.detected==='unknown'&&!instruments.includes(state.assignments[track.id]))
       throw new Error(`轨道「${track.name}」乐器未识别；请先试听并指定乐器。`);
   $('generateBtn').disabled=true; $('generateBtn').textContent='正在生成…';
   try {
-    const data=await window.scoresprout.generate(state.source.id,state.trackIds,state.difficulty,title,state.assignments);
+    const data=await window.scoresprout.generate(state.source.id,state.trackIds,state.difficulty,title,state.assignments,
+      state.source.inputType==='mp3'?state.mp3Instrument:null);
     await window.scoresprout.renameSong(state.source.id,title);
     state.source.title=title; $('pageTitle').textContent=title;
     await refreshLibrary(); await renderVersion(data); notice('乐谱已保存到本地音乐库。','success');
@@ -254,13 +256,13 @@ function bind() {
   $('emptyImportBtn').addEventListener('click',()=>guarded(importMidi));
   $('importMp3Btn').addEventListener('click',()=>guarded(importMp3));
   $('emptyImportMp3Btn').addEventListener('click',()=>guarded(importMp3));
-  $('retranscribeMp3').addEventListener('click',()=>guarded(retranscribeMp3));
   $('exportTranscribedMidi').addEventListener('click',()=>guarded(async()=>{
     if(!state.source||state.source.inputType!=='mp3')return;
     const file=await window.scoresprout.exportSourceMidi(state.source.id);
     if(file)notice(`已导出转写 MIDI：${file}`,'success');
   }));
   $('generateBtn').addEventListener('click',()=>guarded(generate));
+  $('mp3Instrument').addEventListener('change',event=>{state.mp3Instrument=event.target.value;renderSelection();});
   $('deleteScore').addEventListener('click',()=>requestDelete(state.entry));
   $('cancelDelete').addEventListener('click',()=>{if(!state.deleting)$('deleteDialog').close();});
   $('confirmDelete').addEventListener('click',confirmDeleteScore);

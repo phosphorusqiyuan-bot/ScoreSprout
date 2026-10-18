@@ -4,11 +4,11 @@
 
 ## 简体中文
 
-ScoreSprout 是一款优先面向 Windows 的本地乐谱桌面软件。导入 `.mid` / `.midi` 后，可选择一条或多条真实存在的轨道及难度，查看五线谱、试听生成版本，并在本机音乐库保存或导出 MusicXML / MIDI。同乐器轨道合并为一个声部；不同乐器轨道生成合奏谱。也可从 `.mp3` 尝试提取单声部旋律，生成钢琴谱或导出转写 MIDI。
+ScoreSprout 是一款优先面向 Windows 的本地乐谱桌面软件。导入 `.mid` / `.midi` 后，可选择一条或多条真实存在的轨道及难度，查看五线谱、试听生成版本，并在本机音乐库保存或导出 MusicXML / MIDI。同乐器轨道合并为一个声部；不同乐器轨道生成合奏谱。MP3 使用 SheetSage2 提取人声旋律、器乐旋律、和弦与节拍：可合并两条旋律生成双手钢琴谱，也可生成吉他、贝斯、鼓练习编配。
 
 ## 安装与启动
 
-需要 Windows 10/11、Node.js 22 或更新版本，以及 pnpm 11。首次安装需要联网下载依赖和 Electron，之后 MIDI 与 MP3 处理都不需要网络，也无需额外安装 Python 或 ffmpeg。
+需要 Windows 10/11、Node.js 22 或更新版本，以及 pnpm 11。MIDI 功能仅需安装 Node 依赖。MP3 功能还需**单独双击 [`安装 SheetSage2.cmd`](安装%20SheetSage2.cmd)**：脚本在项目的 `.sheetsage2-runtime/` 内安装 Python 3.11、CUDA 版 PyTorch 和模型。首次下载约数 GB，建议预留至少 15 GB 磁盘空间；完成后可离线转写。脚本不会把 MP3 上传至模型服务。无需另外安装系统 Python 或 FFmpeg；没有 NVIDIA 显卡时会尝试 CPU，但会慢得多。
 
 **快捷启动：**下载项目后，双击根目录的 [`启动 ScoreSprout.cmd`](启动%20ScoreSprout.cmd)。首次运行会自动安装依赖，之后双击即可直接打开应用。Node.js / pnpm 尚未安装时，启动窗口会提示安装。
 
@@ -18,19 +18,19 @@ ScoreSprout 是一款优先面向 Windows 的本地乐谱桌面软件。导入 `
 
 ```powershell
 corepack enable
-corepack pnpm install
+corepack pnpm install --store-dir .pnpm-store
 corepack pnpm start
 ```
 
-如果已安装 pnpm，可以直接运行 `pnpm install` 和 `pnpm start`。本项目是可直接运行的 Electron 桌面应用；第一版暂未制作 Windows 安装包。
+如果已安装 pnpm，可以直接运行 `pnpm install --store-dir .pnpm-store` 和 `pnpm start`。本项目是可直接运行的 Electron 桌面应用；第一版暂未制作 Windows 安装包。
 
 想找 MIDI 文件可访问 [MidiShow](https://www.midishow.com/)、[BitMidi](https://bitmidi.com/)、[FreeMIDI](https://freemidi.org/) 或 [VGMusic](https://www.vgmusic.com/)。请下载 `.mid` / `.midi` 文件后再导入，并遵守各站及作品的使用条款。应用不从这些网站直接抓取文件；VSQX 等声库工程文件暂不支持导入。
 
 ## 使用
 
-1. 点击「导入 MIDI 文件」，或点击「MP3 提取钢琴旋律」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。如果以前导入的 MP3 含有杂音符，打开旧乐谱后点击「重新转写原始 MP3」；新版结果会另存，旧乐谱保留。尚未生成乐谱的 MP3 也会在音乐库显示为「待生成」，重启后仍可打开。
-2. 查看速度、拍号、调号和轨道列表，修改歌曲名。MIDI 可勾选多条有音符的轨道、试听并手动指定未识别的乐器。MP3 不提供乐器选择，统一以钢琴演奏提取到的旋律；请先试听确认。
-3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。已识别的乐器轨道不能冒充另一种乐器。
+1. 点击「导入 MIDI 文件」，或先完成模型安装后点击「MP3 提取旋律（SheetSage2）」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。
+2. 查看速度、拍号、调号和轨道列表，修改歌曲名。MIDI 可勾选多条有音符的轨道、试听并手动指定未识别的乐器。MP3 会显示有音符的人声、器乐旋律轨道；分别试听后可勾选一条或两条，并在「生成乐器」中选择钢琴、吉他、贝斯或鼓。轨道预览统一使用钢琴音色。
+3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。MP3 钢琴谱将人声旋律置于右手、器乐旋律置于左手；只有一条旋律时只写该旋律。吉他使用所选旋律与预测和弦，贝斯使用预测和弦根音，鼓使用预测节拍。结果区会标明这些是练习编配，不是原曲真实分轨。MIDI 已识别的乐器轨道不能冒充另一种乐器。
 4. 在结果区域播放、暂停、停止或拖动进度。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
 5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。再次选择难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
 6. 点击音乐库条目旁的「删除」或结果区的「删除乐谱」，确认后移除此版本。原始 MIDI、其他版本和已导出的文件会保留；当前打开的版本被删除时，播放会停止，仍可重新生成。
@@ -45,9 +45,12 @@ corepack pnpm start
 corepack pnpm samples
 corepack pnpm test
 corepack pnpm smoke
+node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetSage2 端到端测试
 ```
 
-`smoke` 会启动真正的 Electron 应用七次：前四次验证 MIDI 生成、导出、播放、删除与重启读取；后三次用真实 MP3 验证解码、单音去杂、旧转写记录升级且保留旧谱、钢琴谱渲染、MIDI 导出及重启读取。结果和导出文件位于项目下自动创建的 `.smoke-*` 目录。测试音频 `samples/440hz-test.mp3` 来自 [badgerodon/mp3](https://github.com/badgerodon/mp3) 的 440 Hz 正弦波样例（MIT License）。
+`smoke` 会启动真正的 Electron 应用七次：前四次验证 MIDI 生成、导出、播放、删除与重启读取；第五次验证降采样；后两次用真实 MP3 验证解码、钢琴谱渲染、MIDI 导出及重启读取。后两次使用固定 MIDI 夹具替代大型模型，因此不评估 SheetSage2 的音高识别质量。结果和导出文件位于项目下自动创建的 `.smoke-*` 目录。测试音频 `samples/440hz-test.mp3` 来自 [badgerodon/mp3](https://github.com/badgerodon/mp3)（MIT License）。
+
+`smoke-sheetsage2.js` 使用仓库内自行合成的 16 音旋律 MP3 和真实模型，检查音高顺序、四种乐器的谱面、MIDI / MusicXML 导出与重启读取。当前实测输出 17 音，末尾多一个伴奏音；该测试不能代表任意流行歌曲的转写准确率。测试音频可用 `node scripts/generate-sheetsage2-probe.js` 生成 PCM，再执行 `ffmpeg -f f32le -ar 22050 -ac 1 -i .sheetsage2-runtime/probe.f32 -codec:a libmp3lame -q:a 2 samples/sheetsage2-melody.mp3` 重新生成。
 
 ## 技术选择
 
@@ -55,7 +58,7 @@ corepack pnpm smoke
 - [midi-file](https://github.com/carter-thaxton/midi-file)：读写标准 MIDI 事件；按轨道、通道与 Program Change 拆分音符。
 - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay)：把生成的 MusicXML 在应用内渲染为五线谱。
 - Web Audio API：本地合成钢琴、拨弦吉他、贝斯与鼓音色，按生成音符调度播放。
-- 浏览器自带的 MP3 解码器与本地频谱分析：结合频谱集中度、泛音抑制、单音选择、跨帧稳定性与最短持续时间筛出主旋律；无法可靠提取时提示失败，不写入猜测的 MIDI。
+- Chromium 解码 MP3；[SheetSage2](https://huggingface.co/m-a-p/SheetSage2) 与其 [MERT-v2-FullSong](https://huggingface.co/m-a-p/MERT-v2-FullSong) 编码器在本机提取人声和器乐旋律。模型权重采用 CC BY-NC 4.0，仅适合符合该许可的非商业用途；模型代码由 Hugging Face 在本地执行，安装时应信任官方仓库。音频不会上传。
 
 应用主进程负责本地文件访问；渲染进程通过受限的 preload API 与主进程通信。导入和生成不向外部服务发送数据。
 
@@ -67,16 +70,17 @@ corepack pnpm smoke
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
 - 暂不导出 PDF，也未制作安装包。可将 MusicXML 交给 MuseScore 等工具继续编辑或导出 PDF。
 - 只处理标准 PPQ MIDI。SMPTE 时间格式暂不支持；极长或非常复杂的文件可能需要人工整理。
-- MP3 转写只尝试单声部主旋律，适合人声或独奏较突出的片段；和弦与伴奏不会完整保留。复杂混音可能被拒绝，也可能仍选错旋律；短装饰音可能被过滤。只用钢琴音色记谱与试听，这不表示原曲使用钢琴。转写谱暂以 120 BPM、4/4 记谱，调号未知；最多处理 25 MB、10 分钟。请试听并核对结果。旧版以其他乐器生成的 MP3 乐谱保留在音乐库，新生成版本只能选钢琴。
+- SheetSage2 的人声与器乐结果是两条候选旋律，并非分离的音轨或完整伴奏。双手钢琴谱把器乐旋律移入左手音域，必要时移八度；它不等于原曲钢琴左手和弦伴奏。MIDI 钢琴谱按分轨与同时发声的音高分手，这仍是启发式判断，交叉声部可能需要在 MusicXML 中手动调整。
+- MP3 的吉他、贝斯、鼓谱是按预测旋律、和弦与节拍生成的练习编配，**不是原曲吉他、贝斯或鼓的转写**；缺少可用和弦时不能生成贝斯谱，缺少节拍时不能生成鼓谱。模型错认和弦或节拍会影响编配。复杂混音、强伴奏或混响仍可能导致错音和漏音，实际曲目请逐条试听。转写 MIDI 使用模型给出的音符时间，谱面仍由 ScoreSprout 量化；最多处理 25 MB、10 分钟。模型一次按最长 5 分钟窗口分析，长音频、CPU 或显存较小的显卡可能耗时很长或内存不足。旧版 MP3 导入项没有保存和弦与节拍，可重新导入原 MP3 创建新版曲目。
 - 网易云音乐、B 站等链接导入和更准确的多乐器音频识别属于后续扩展方向，当前不接入。
 
 ## English
 
-ScoreSprout is a local desktop app, built with Windows in mind, that turns MIDI tracks into sheet music at a level you can play. Import a `.mid` or `.midi` file, choose one or more tracks and a difficulty, then read and play the generated score. Tracks of the same instrument merge into one part; tracks of different instruments form an ensemble score. You can also attempt to extract a single melody from an `.mp3`, render it as piano notation, and export the transcription as MIDI.
+ScoreSprout is a local desktop app, built with Windows in mind, that turns MIDI tracks into sheet music at a level you can play. Import a `.mid` or `.midi` file, choose one or more tracks and a difficulty, then read and play the generated score. Tracks of the same instrument merge into one part; tracks of different instruments form an ensemble score. MP3 transcription uses SheetSage2 to predict vocal and instrumental melodies, chords, and beats. You can combine two melodies on a grand staff or make practice arrangements for guitar, bass, and drums.
 
 ### Install and run
 
-Requires Windows 10/11, Node.js 22 or newer, and pnpm 11. The first installation downloads dependencies and Electron; MIDI and MP3 processing work offline afterward. No separate Python or ffmpeg installation is needed. In PowerShell, from the project directory:
+Requires Windows 10/11, Node.js 22 or newer, and pnpm 11. For MP3 transcription, double-click [`安装 SheetSage2.cmd`](安装%20SheetSage2.cmd) once. It installs an isolated Python 3.11 runtime, CUDA PyTorch and model files in `.sheetsage2-runtime/`; allow at least 15 GB of free space and several GB of downloads. Later transcription works offline. A separate system Python or FFmpeg is unnecessary. CPU fallback may be very slow. In PowerShell, from the project directory:
 
 **Quick launch:** double-click [`启动 ScoreSprout.cmd`](启动%20ScoreSprout.cmd) in the project root. It installs dependencies on the first run, then opens the app directly on later runs. If Node.js or pnpm is missing, the launcher displays an installation hint.
 
@@ -84,19 +88,19 @@ For compatibility with restricted graphics environments, the quick launcher uses
 
 ```powershell
 corepack enable
-corepack pnpm install
+corepack pnpm install --store-dir .pnpm-store
 corepack pnpm start
 ```
 
-If pnpm is already installed, use `pnpm install` and `pnpm start`. This is a runnable Electron application; a Windows installer is not included in the first release.
+If pnpm is already installed, use `pnpm install --store-dir .pnpm-store` and `pnpm start`. This is a runnable Electron application; a Windows installer is not included in the first release.
 
 You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](https://bitmidi.com/), [FreeMIDI](https://freemidi.org/), and [VGMusic](https://www.vgmusic.com/). Download a `.mid` or `.midi` file and import it into ScoreSprout, following each site's and work's terms. The app does not fetch files from those sites. VSQX and other vocal-synth project formats are not supported.
 
 ### Use
 
-1. Click **导入 MIDI 文件** (Import MIDI file) or **MP3 提取钢琴旋律** (Extract piano melody from MP3). The app copies the file to its local library without changing the original. For an MP3, **导出转写 MIDI** exports the raw transcription immediately. For an older noisy import, open its score and click **重新转写原始 MP3** (Retranscribe original MP3). The improved transcription is saved separately; existing scores remain available. MP3 sources without a generated score also appear in the library as **待生成** (Pending) and can be reopened after a restart.
-2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. MIDI tracks can be previewed, selected together, and assigned an instrument when unidentified. MP3 results have no instrument selector: they use piano to play the extracted melody. Preview before generating a score.
-3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). A recognized instrument track cannot be relabeled as another instrument.
+1. Click **导入 MIDI 文件** (Import MIDI file) or **MP3 提取旋律（SheetSage2）** after model setup. The app copies the file to its local library without changing the original. For an MP3, **导出转写 MIDI** exports the raw transcription immediately.
+2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. MIDI tracks can be previewed, selected together, and assigned an instrument when unidentified. MP3 results show vocal and instrumental melody tracks when notes are present. Preview and select one or both, then choose an output instrument. Track previews use piano sound.
+3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). On MP3, the vocal melody goes to the right piano hand and the instrumental melody to the left. Guitar combines a selected melody with predicted chords; bass uses chord roots; drums use predicted beats. These are practice arrangements, not transcriptions of the source instruments. A recognized MIDI instrument track cannot be relabeled as another instrument.
 4. Play, pause, stop, or seek through the result. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
 5. Reopen saved versions from the local library, or filter by song, instrument, and difficulty. Generate another difficulty to save another version. Different instruments of the same song have separate internal IDs.
 6. Click **删除** (Delete) beside a library entry or **删除乐谱** (Delete score) in the result panel, then confirm. Only that version is removed; the original MIDI, other versions, and exported files are kept. Deleting the open version stops playback, and you can generate it again from the retained source.
@@ -111,9 +115,12 @@ The `samples/` directory contains eight MIDI files: piano, guitar, bass, drums, 
 corepack pnpm samples
 corepack pnpm test
 corepack pnpm smoke
+node scripts/smoke-sheetsage2.js   # After model setup, run the real SheetSage2 end-to-end test.
 ```
 
-The smoke test launches the Electron app for MIDI generation, rendering, export, playback and deletion, then imports a real MP3, verifies noise reduction and legacy transcription upgrade without losing the old score, renders a piano score, exports MIDI, and checks persistence after restart. Outputs are written to a `.smoke-*` directory in the project. The 440 Hz test MP3 comes from [badgerodon/mp3](https://github.com/badgerodon/mp3) (MIT License).
+The smoke test launches Electron for MIDI generation, rendering, export, playback, deletion, and audio resampling. It also decodes a real MP3 and tests score creation, MIDI export, and persistence with a fixed MIDI fixture in place of the large model. It does not measure SheetSage2 accuracy. Outputs are written to a `.smoke-*` directory. The 440 Hz MP3 comes from [badgerodon/mp3](https://github.com/badgerodon/mp3) (MIT License).
+
+`smoke-sheetsage2.js` uses a self-generated 16-note melody MP3 and the actual model to check note order, all four instrument scores, MIDI / MusicXML export, and reopening after restart. The current result has 17 notes, with one extra accompaniment note at the end. This synthetic probe does not establish accuracy on arbitrary songs. Recreate it with `node scripts/generate-sheetsage2-probe.js`, then `ffmpeg -f f32le -ar 22050 -ac 1 -i .sheetsage2-runtime/probe.f32 -codec:a libmp3lame -q:a 2 samples/sheetsage2-melody.mp3`.
 
 ### Technology
 
@@ -121,7 +128,7 @@ The smoke test launches the Electron app for MIDI generation, rendering, export,
 - [midi-file](https://github.com/carter-thaxton/midi-file) reads and writes standard MIDI events. Notes are separated by track, channel, and Program Change.
 - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) renders generated MusicXML as staff notation inside the app.
 - The Web Audio API synthesizes piano, plucked guitar, bass, and drum sounds locally from the generated notes.
-- Chromium's MP3 decoder and local spectral analysis attempt predominant melody extraction. Spectral contrast, harmonic suppression, one pitch per frame, temporal stability, and a minimum note duration reject spurious notes. Ambiguous audio fails with an explanation instead of saving a guessed transcription.
+- Chromium decodes MP3 locally. [SheetSage2](https://huggingface.co/m-a-p/SheetSage2) and its [MERT-v2-FullSong](https://huggingface.co/m-a-p/MERT-v2-FullSong) encoder extract separate vocal and instrumental melodies locally. Their weights use CC BY-NC 4.0, so use must comply with the noncommercial license. Setup downloads and executes code from the official Hugging Face model repository. Audio stays on the device.
 
 The main process handles local file access; the renderer communicates through a restricted preload API. Importing and generating do not send song data to an external service.
 
@@ -133,5 +140,6 @@ The main process handles local file access; the renderer communicates through a 
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
 - PDF export and a packaged installer are not included. Open the MusicXML in MuseScore or another notation editor to refine it or export a PDF.
 - Only standard PPQ MIDI is supported. SMPTE timing is not supported, and very long or complex files may need manual cleanup.
-- MP3 transcription attempts a single predominant melody. Chords and accompaniment are not preserved. Dense mixes may fail, or the wrong melody may still be chosen; very short ornaments may be removed. Piano is the notation and playback sound, not a claim about the original instrument. Transcriptions assume 120 BPM and 4/4 with an unknown key. The limit is 25 MB and 10 minutes. Preview and check the result. Older MP3 scores made with other instrument settings remain in the library, but new MP3 scores use piano only.
+- SheetSage2's vocal and instrumental outputs are melody candidates, not separated stems or full accompaniment. The piano arrangement shifts the instrumental melody into the left-hand range, sometimes by an octave; it is not the recording's actual piano accompaniment. MIDI piano hand assignment uses tracks and simultaneous pitch ranges as a heuristic and may need manual editing in MusicXML.
+- MP3 guitar, bass, and drum scores are practice arrangements from predicted melody, chords, and beats, **not transcriptions of the recording's individual instruments**. Bass needs recognizable chords; drums need recognizable beats. Prediction errors affect these arrangements. Strong accompaniment or reverb can cause wrong or missing notes; preview both tracks. MIDI retains the model's note timing; ScoreSprout quantizes the score. MP3 input is limited to 25 MB and 10 minutes. Long files, CPU inference, or small GPUs may be very slow or run out of memory. Older MP3 library entries lack saved chord and beat data; reimport the original MP3 to create a current entry.
 - Importing links from NetEase Cloud Music, Bilibili, or other sites, and more accurate multi-instrument audio recognition, remain future extensions.

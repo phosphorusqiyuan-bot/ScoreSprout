@@ -5,3 +5,4 @@ node_modules/
 .smoke-data/
 .smoke-exports/
 *.log
+.sheetsage2-runtime/

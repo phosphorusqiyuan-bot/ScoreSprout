@@ -59,9 +59,10 @@ function renderPart(version, part, measureCount, measureTicks, partId) {
   for (let m = 0; m < measureCount; m++) {
     const start = m*measureTicks, end = start+measureTicks;
     const attributes = m ? '' : `<attributes><divisions>${version.ppq}</divisions><key><fifths>${version.keyFifths}</fifths><mode>${version.keyMode ? 'minor':'major'}</mode></key><time><beats>${num}</beats><beat-type>${den}</beat-type></time>${isPiano ? '<staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef>' : `<clef>${clef}</clef>`}</attributes><direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${version.bpm}</per-minute></metronome></direction-type><sound tempo="${version.bpm}"/></direction>`;
-    const upper = version.notes.filter(n => n.start < end && n.start+n.duration > start && (!isPiano || n.pitch >= 60));
+    const upper = version.notes.filter(n => n.start < end && n.start+n.duration > start &&
+      (!isPiano || n.hand==='right' || (!n.hand && n.pitch >= 60)));
     const upperXML = notesXML(voicePieces(upper,start,end),isPiano ? 1 : null,1,version.instrument,version.keyFifths < 0);
-    const lowerXML = isPiano ? `<backup><duration>${measureTicks}</duration></backup>${notesXML(voicePieces(version.notes.filter(n => n.start < end && n.start+n.duration > start && n.pitch < 60),start,end),2,2,version.instrument,version.keyFifths < 0)}` : '';
+    const lowerXML = isPiano ? `<backup><duration>${measureTicks}</duration></backup>${notesXML(voicePieces(version.notes.filter(n => n.start < end && n.start+n.duration > start && (n.hand==='left'||(!n.hand&&n.pitch<60))),start,end),2,2,version.instrument,version.keyFifths < 0)}` : '';
     measures.push(`<measure number="${m+1}">${attributes}${upperXML}${lowerXML}</measure>`);
   }
   return { partList, body:`<part id="${partId}">${measures.join('')}</part>` };

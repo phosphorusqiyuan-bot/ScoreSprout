@@ -9,7 +9,8 @@
     "start": "electron .",
     "test": "node --test",
     "samples": "node scripts/generate-samples.js",
-    "smoke": "node scripts/smoke.js"
+    "smoke": "node scripts/smoke.js",
+    "smoke:sheetsage2": "node scripts/smoke-sheetsage2.js"
   },
   "dependencies": {
     "midi-file": "^1.2.4",

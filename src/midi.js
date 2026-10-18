@@ -1,4 +1,5 @@
 const { parseMidi, writeMidi } = require('midi-file');
+const { arrangeMp3 } = require('./mp3-arrangement');
 
 const INSTRUMENTS = { piano: '钢琴', guitar: '吉他', drums: '鼓', bass: '贝斯', ensemble: '合奏' };
 const DIFFICULTIES = { beginner: '新手版', intermediate: '进阶版', full: '完整版' };
@@ -155,7 +156,7 @@ function selectNotes(notes, instrument, difficulty, ppq) {
       if (instrument !== 'drums') {
         const ranges = { piano: [48,84], guitar: [40,88], bass: [28,60] };
         const [low, high] = ranges[instrument]; copy.pitch = clampPitch(copy.pitch, low, high);
-        const hand = instrument === 'piano' && copy.pitch < 60 ? 'low' : 'high';
+        const hand = instrument === 'piano' && (copy.hand==='left'||(!copy.hand&&copy.pitch<60)) ? 'low' : 'high';
         if (last[hand] != null && difficulty === 'beginner') {
           while (copy.pitch - last[hand] > 12 && copy.pitch - 12 >= low) copy.pitch -= 12;
           while (last[hand] - copy.pitch > 12 && copy.pitch + 12 <= high) copy.pitch += 12;
@@ -168,21 +169,52 @@ function selectNotes(notes, instrument, difficulty, ppq) {
   return result;
 }
 
+function assignPianoHands(notes) {
+  if(notes.some(note=>note.hand))return notes;
+  const byTrack=new Map();
+  for(const note of notes){
+    if(!byTrack.has(note.sourceTrackId))byTrack.set(note.sourceTrackId,[]);
+    byTrack.get(note.sourceTrackId).push(note.pitch);
+  }
+  if(byTrack.size>1){
+    const ordered=[...byTrack].map(([id,pitches])=>({id,median:[...pitches].sort((a,b)=>a-b)[Math.floor(pitches.length/2)]}))
+      .sort((a,b)=>a.median-b.median);
+    if(ordered.at(-1).median-ordered[0].median>=5){
+      const leftIds=new Set(ordered.slice(0,Math.ceil(ordered.length/2)).map(item=>item.id));
+      return notes.map(note=>({...note,hand:leftIds.has(note.sourceTrackId)?'left':'right'}));
+    }
+  }
+  // A single melody belongs to the right hand regardless of its octave.
+  const pairs=[];
+  for(let i=0;i<notes.length;i++){
+    const current=notes[i];
+    for(let j=i+1;j<notes.length&&notes[j].start-current.start<=60;j++){
+      const other=notes[j];
+      if(Math.abs(other.pitch-current.pitch)>=5)pairs.push((other.pitch+current.pitch)/2);
+    }
+  }
+  if(!pairs.length)return notes.map(note=>({...note,hand:'right'}));
+  pairs.sort((a,b)=>a-b);
+  const split=Math.max(54,Math.min(72,pairs[Math.floor(pairs.length/2)]));
+  return notes.map(note=>({...note,hand:note.pitch<split?'left':'right'}));
+}
+
 function generateVersion(source, trackIds, instrument, difficulty, title, manual = false) {
   if ((instrument !== 'auto' && !['piano','guitar','bass','drums'].includes(instrument)) || !DIFFICULTIES[difficulty])
     throw new Error('请选择有效的乐器和难度。');
-  if (source.inputType==='mp3' && instrument!=='auto' && instrument!=='piano')
-    throw new Error('MP3 没有可靠的分轨信息，只能生成钢琴旋律谱。');
-  const ids = [...new Set(Array.isArray(trackIds) ? trackIds : [trackIds])];
-  if (!ids.length || ids.some(id => typeof id !== 'string')) throw new Error('请至少选择一个有音符的轨道。');
+  const ids = [...new Set(Array.isArray(trackIds) ? trackIds : [trackIds])].filter(id=>id!=null);
+  if (ids.some(id => typeof id !== 'string') || (!ids.length && source.inputType!=='mp3'))
+    throw new Error('请至少选择一个有音符的轨道。');
   const tracks = ids.map(id => source.tracks.find(t => t.id === id));
   if (tracks.some(t => !t?.notes.length)) throw new Error('所选轨道没有可用音符，无法生成乐谱。');
   const assignments = {}, groups = new Map();
-  for (const track of tracks) {
-    let target = source.inputType==='mp3' ? 'piano' : track.detected;
-    if(source.inputType==='mp3' && typeof manual==='object' && manual!==null &&
-      manual[track.id] && manual[track.id]!=='piano')
-      throw new Error('MP3 没有可靠的分轨信息，只能生成钢琴旋律谱。');
+  let arrangement=null;
+  if(source.inputType==='mp3'){
+    const target=instrument==='auto'?'piano':instrument;
+    arrangement=arrangeMp3(source,tracks,target);
+    groups.set(target,[{id:'mp3-arrangement',name:arrangement.trackName,notes:arrangement.notes}]);
+  }else for (const track of tracks) {
+    let target = track.detected;
     if (target === 'unknown') {
       target = typeof manual === 'object' && manual !== null ? manual[track.id] : manual ? instrument : null;
       if (!['piano','guitar','bass','drums'].includes(target))
@@ -199,30 +231,36 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
   for (const target of ['piano','guitar','bass','drums']) {
     const selected = groups.get(target);
     if (!selected) continue;
-    const scaled = selected.flatMap(track => track.notes.map(n => ({ pitch:n.pitch,
-      start:n.start*ppq/source.sourcePpq, duration:n.duration*ppq/source.sourcePpq, velocity:n.velocity })))
+    let scaled = selected.flatMap(track => track.notes.map(n => ({ pitch:n.pitch,
+      start:n.start*ppq/source.sourcePpq, duration:n.duration*ppq/source.sourcePpq,
+      velocity:n.velocity,hand:n.hand,sourceTrackId:track.id })))
       .sort((a,b) => a.start-b.start || a.pitch-b.pitch).slice(0,8000);
-    const chosen = selectNotes(scaled,target,difficulty,ppq);
+    if(target==='piano')scaled=assignPianoHands(scaled);
+    const chosen = target==='piano' ?
+      ['right','left'].flatMap(hand=>selectNotes(scaled.filter(note=>note.hand===hand),target,difficulty,ppq)) :
+      selectNotes(scaled,target,difficulty,ppq);
     const unique = new Map();
     for (const n of chosen) {
       const start = Math.max(0,Math.round(n.start/grid)*grid);
       const end = Math.round((n.start+n.duration)/grid)*grid;
       const note = { pitch:n.pitch,start,duration:target === 'drums' ? grid : Math.max(grid,end-start),
-        velocity:n.velocity,instrument:target };
+        velocity:n.velocity,instrument:target,...(n.hand?{hand:n.hand}:{}) };
       const key = `${start}:${n.pitch}`, previous = unique.get(key);
       if (!previous) unique.set(key,note);
       else { previous.duration=Math.max(previous.duration,note.duration); previous.velocity=Math.max(previous.velocity,note.velocity); }
     }
     const notes = [...unique.values()].sort((a,b) => a.start-b.start || a.pitch-b.pitch);
-    if (notes.length) parts.push({ instrument:target,trackIds:selected.map(t=>t.id),
+    if (notes.length) parts.push({ instrument:target,trackIds:arrangement?arrangement.trackIds:selected.map(t=>t.id),
       trackName:selected.map(t=>t.name).join(' + '),notes });
   }
   if (!parts.length) throw new Error('所选轨道没有可用于生成乐谱的音符。');
   const notes = parts.flatMap(part=>part.notes).sort((a,b)=>a.start-b.start || a.pitch-b.pitch);
   return { title:(title || source.title).trim() || source.title,
     instrument:parts.length === 1 ? parts[0].instrument : 'ensemble',difficulty,
-    trackId:ids[0],trackIds:ids,trackName:tracks.map(t=>t.name).join(' + '),
-    sourceTrack:tracks[0].sourceTrack,assignments,bpm:source.bpm,
+    trackId:ids[0]||null,trackIds:arrangement?arrangement.trackIds:ids,
+    trackName:arrangement?arrangement.trackName:tracks.map(t=>t.name).join(' + '),
+    sourceTrack:tracks[0]?.sourceTrack||null,assignments,bpm:source.bpm,
+    ...(arrangement?{provenance:arrangement.provenance}:{}),
     timeSignature:source.timeSignature,keyFifths:source.keyFifths,keyMode:source.keyMode,ppq,notes,parts };
 }
 
@@ -251,4 +289,4 @@ function versionToMidi(version) {
   return Buffer.from(writeMidi({header:{format:tracks.length>1?1:0,numTracks:tracks.length,ticksPerBeat:version.ppq},tracks}));
 }
 
-module.exports = { analyzeMidi, generateVersion, versionToMidi, INSTRUMENTS, DIFFICULTIES, identify };
+module.exports = { analyzeMidi, generateVersion, versionToMidi, assignPianoHands, INSTRUMENTS, DIFFICULTIES, identify };

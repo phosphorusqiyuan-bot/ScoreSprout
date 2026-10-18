@@ -5,12 +5,14 @@ const crypto = require('node:crypto');
 const { analyzeMidi, generateVersion, versionToMidi, INSTRUMENTS, DIFFICULTIES } = require('./midi');
 const { versionToMusicXML } = require('./musicxml');
 const { deleteVersion } = require('./library');
+const { transcribeWithSheetSage } = require('./sheetsage2');
 const { transcribedNotesToMidi } = require('./audio-import');
 const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
-const TRANSCRIPTION_REVISION='melody-v3';
+const TRANSCRIPTION_REVISION='sheetsage2-arrangements-v1';
 
 let libraryRoot;
 let pendingAudio=null;
+const transcriptionWorkers=new Set();
 if (process.env.SCORESPROUT_TEST_DATA) {
   fs.mkdirSync(process.env.SCORESPROUT_TEST_DATA,{recursive:true});
   app.setPath('userData',path.resolve(process.env.SCORESPROUT_TEST_DATA));
@@ -25,28 +27,33 @@ function markMp3Source(source) {
   source.inputType='mp3';
   for(const track of source.tracks){
     track.detected='piano';
-    track.instrumentName='钢琴旋律（转写音色）';
+    const vocal=/vocal/i.test(track.name);
+    track.name=vocal?'人声旋律':/\bins\b|instrumental/i.test(track.name)?'器乐旋律':track.name;
+    track.instrumentName='转写旋律（钢琴试听）';
   }
-  source.warnings.unshift('MP3 只尝试提取单声部旋律，并以钢琴记谱和试听；不能识别原曲乐器。复杂混音可能无法可靠转写。速度暂按 120 BPM 记谱。');
+  source.warnings.unshift('SheetSage2 分别提取人声、器乐旋律及和弦、节拍。吉他、贝斯、鼓由这些结果改编，不是原曲乐器分轨。');
   return source;
 }
 function ensureSource(id) {
   const manifest = readManifest(id);
   const source = analyzeMidi(fs.readFileSync(path.join(songDir(id), 'original.mid')), manifest.filename);
   source.title = manifest.title;
-  if(manifest.sourceType==='mp3')markMp3Source(source);
+  if(manifest.sourceType==='mp3'){
+    source.audioAnalysis=manifest.audioAnalysis||{};
+    markMp3Source(source);
+  }
   return { manifest, source };
 }
-function prepareAudio(bytes,filename,title) {
-  // A new revision creates a separate source, so arrangements made from an older
-  // transcription remain available when the same MP3 is processed again.
+function prepareAudio(bytes,filename) {
+  // Include the algorithm revision so an older import does not masquerade as
+  // the current transcription when the same MP3 is selected again.
   const id=crypto.createHash('sha256').update(bytes).update(TRANSCRIPTION_REVISION).digest('hex').slice(0,24);
   if(fs.existsSync(manifestPath(id))){
     const {manifest,source}=ensureSource(id);
     if(manifest.sourceType==='mp3')return {existing:true,source:{id,...summary(source)}};
   }
   const token=crypto.randomUUID();
-  pendingAudio={token,id,filename,bytes,title};
+  pendingAudio={token,id,filename,bytes};
   return {token,filename,bytes:Uint8Array.from(bytes)};
 }
 function wrap(handler) { return async (_event,...args) => { try { return { ok:true, data:await handler(...args) }; } catch (e) { return { ok:false, error:e.message || String(e) }; } }; }
@@ -82,31 +89,49 @@ app.whenReady().then(() => {
     const bytes=fs.readFileSync(file);
     return prepareAudio(bytes,path.basename(file));
   }));
-  ipcMain.handle('retranscribe-audio',wrap(id=>{
-    pendingAudio=null;
-    const manifest=readManifest(id);
-    if(manifest.sourceType!=='mp3')throw new Error('只有 MP3 导入的曲目可以重新转写。');
-    const file=path.join(songDir(id),'original.mp3');
-    if(!fs.existsSync(file))throw new Error('找不到保存的原始 MP3，请重新导入文件。');
-    return prepareAudio(fs.readFileSync(file),manifest.audioFilename||`${manifest.title}.mp3`,manifest.title);
-  }));
-  ipcMain.handle('save-transcription', wrap((token,notes) => {
+  ipcMain.handle('transcribe-audio', async (event,token,samples) => {
+    try {
     if(!pendingAudio||pendingAudio.token!==token)throw new Error('MP3 导入已过期，请重新选择文件。');
-    const {id,filename,bytes,title}=pendingAudio;
-    const midi=transcribedNotesToMidi(notes);
+    if(!(samples instanceof Float32Array)||!samples.length||samples.length>22050*600)
+      throw new Error('音频数据无效或超过 10 分钟。');
+    // The 440 Hz Electron smoke fixture exercises UI, storage and export. A
+    // musical recording must be used separately to evaluate the actual model.
+    const mock=process.env.SCORESPROUT_SMOKE_STAGE==='mp3' ? {
+      midi:transcribedNotesToMidi([{pitch:69,start:0,duration:2.7,velocity:90}]),
+      metadata:{vocalNotes:0,instrumentalNotes:1,noteCount:1,device:'fixture'}
+    } : null;
+    const {midi,metadata,analysis}=mock||await transcribeWithSheetSage(samples,progress=>{
+      if(!event.sender.isDestroyed())event.sender.send('transcription-progress',{token,progress});
+    },{children:transcriptionWorkers});
+    // A later import invalidates this pending result instead of silently saving
+    // the transcription under the wrong audio's token.
+    if(!pendingAudio||pendingAudio.token!==token)throw new Error('MP3 导入已更改，请重新选择文件。');
+    pendingAudio.transcribedMidi=midi;
+    pendingAudio.transcriptionStats=metadata;
+    pendingAudio.audioAnalysis=analysis||{};
+    return {ok:true,data:metadata};
+    } catch(error) {return {ok:false,error:error.message||String(error)};}
+  });
+  ipcMain.handle('save-transcription', wrap(token => {
+    if(!pendingAudio||pendingAudio.token!==token)throw new Error('MP3 导入已过期，请重新选择文件。');
+    const {id,filename,bytes}=pendingAudio;
+    const midi=pendingAudio.transcribedMidi;
+    if(!midi)throw new Error('SheetSage2 尚未生成 MIDI。');
     const source=analyzeMidi(midi,`${path.parse(filename).name}.mid`);
     if(!source.tracks.length)throw new Error('转写结果没有可用音符。');
     const dir=songDir(id);
     fs.mkdirSync(dir,{recursive:true});
     fs.writeFileSync(path.join(dir,'original.mp3'),bytes);
     fs.writeFileSync(path.join(dir,'original.mid'),midi);
-    const manifest={id,title:title||path.parse(filename).name||'未命名音频',
+    const manifest={id,title:path.parse(filename).name||'未命名音频',
       filename:`${path.parse(filename).name}.mid`,audioFilename:filename,sourceType:'mp3',
       transcriptionRevision:TRANSCRIPTION_REVISION,
+      transcriptionStats:pendingAudio.transcriptionStats,
+      audioAnalysis:pendingAudio.audioAnalysis,
       createdAt:new Date().toISOString(),variants:[]};
     writeJSON(manifestPath(id),manifest);
     pendingAudio=null;
-    source.title=manifest.title;markMp3Source(source);
+    source.title=manifest.title;source.audioAnalysis=manifest.audioAnalysis;markMp3Source(source);
     return {id,...summary(source)};
   }));
   ipcMain.handle('get-source', wrap(id => { const {source} = ensureSource(id); return {id,...summary(source)}; }));
@@ -145,14 +170,14 @@ app.whenReady().then(() => {
   ipcMain.handle('generate-version', wrap((id,trackIds,choice,difficultyOrTitle,titleOrAssignments,manual) => {
     const {manifest,source} = ensureSource(id);
     const multiple = Array.isArray(trackIds);
-    const instrument = multiple ? 'auto' : choice;
+    const instrument = multiple ? (source.inputType==='mp3' ? manual||'piano' : 'auto') : choice;
     const difficulty = multiple ? choice : difficultyOrTitle;
     const title = multiple ? difficultyOrTitle : titleOrAssignments;
     const assignments = multiple ? titleOrAssignments || {} : manual;
     const version = generateVersion(source,trackIds,instrument,difficulty,title,assignments);
     manifest.title = version.title;
     const key = version.trackIds.length === 1 ? `${version.trackId}|${version.instrument}|${difficulty}` :
-      `${version.trackIds.slice().sort().join('|')}|${Object.entries(version.assignments).sort().map(([id,value])=>`${id}:${value}`).join('|')}|${difficulty}`;
+      `${version.instrument}|${version.trackIds.slice().sort().join('|')}|${Object.entries(version.assignments).sort().map(([id,value])=>`${id}:${value}`).join('|')}|${difficulty}`;
     const variantId = `${version.instrument}-${difficulty}-${crypto.createHash('sha256').update(key).digest('hex').slice(0,12)}`;
     const dir = path.join(songDir(id),'variants'); fs.mkdirSync(dir,{recursive:true});
     writeJSON(path.join(dir,`${variantId}.json`),version);
@@ -169,13 +194,7 @@ app.whenReady().then(() => {
     const items=[];
     for (const item of fs.readdirSync(libraryRoot,{withFileTypes:true})) {
       if (!item.isDirectory() || !/^[a-f0-9]{24}$/.test(item.name)) continue;
-      try {
-        const m=readManifest(item.name);
-        for (const v of m.variants) items.push({ ...v,title:m.title });
-        if(m.sourceType==='mp3'&&!m.variants.length)
-          items.push({id:'source',songId:item.name,title:m.title,instrument:'piano',
-            difficulty:null,sourceOnly:true,generatedAt:m.createdAt||'1970-01-01T00:00:00.000Z'});
-      }
+      try { const m=readManifest(item.name); for (const v of m.variants) items.push({ ...v,title:m.title }); }
       catch { /* damaged entry does not hide the rest of the library */ }
     }
     return items.sort((a,b)=>b.generatedAt.localeCompare(a.generatedAt));
@@ -221,4 +240,7 @@ app.whenReady().then(() => {
     } catch(e){console.error('SMOKE FAILURE',e);app.exit(1);}
   });
 });
-app.on('window-all-closed',()=>app.quit());
+app.on('window-all-closed',()=>{
+  for(const worker of transcriptionWorkers)worker.kill();
+  app.quit();
+});

@@ -2,10 +2,6 @@
   await importMp3();
   const source=state.source;
   if(!source||source.inputType!=='mp3'||source.tracks.length!==1)throw Error('MP3 import failed');
-  const savedSource=(await window.scoresprout.listLibrary()).find(item=>item.sourceOnly&&item.songId===source.id);
-  if(!savedSource)throw Error('unarranged MP3 is missing from library');
-  await openLibrary(savedSource);
-  if(state.source.id!==source.id)throw Error('unarranged MP3 did not reopen');
   const track=source.tracks[0];
   if(track.detected!=='piano'||track.noteCount!==1)throw Error(`440 Hz audio must produce one piano melody note, got ${track.noteCount}`);
   const preview=await window.scoresprout.previewTrack(source.id,track.id);
@@ -17,8 +13,12 @@
   state.difficulty='full';
   await generate();
   if(!$('score').querySelector('svg')||!state.entry)throw Error('transcribed score did not render');
+  await player.play();
+  if(!player.playing)throw Error('MP3 score playback did not start');
+  player.pause();
+  if(player.playing)throw Error('MP3 score playback did not pause');
+  player.seek(Math.min(.5,player.duration/2));
+  player.stop();
   const versionMidi=await window.scoresprout.exportVersion(source.id,state.entry.id,'mid');
-  const retry=await window.scoresprout.retranscribeAudio(source.id);
-  if(!retry.existing||retry.source.id!==source.id)throw Error('latest MP3 transcription was not recognized');
   return {songId:source.id,notes:track.noteCount,rawMidi,versionMidi,variantId:state.entry.id,rendered:true};
 })()

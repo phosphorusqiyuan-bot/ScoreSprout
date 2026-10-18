@@ -1,0 +1,29 @@
+(async()=>{
+  await importMp3();
+  const source=state.source;
+  if(!source||source.inputType!=='mp3')throw Error('SheetSage2 MP3 import failed');
+  const track=source.tracks.find(t=>t.name==='器乐旋律');
+  if(!track)throw Error(`Instrumental melody missing: ${JSON.stringify(source.tracks)}`);
+  const preview=await window.scoresprout.previewTrack(source.id,track.id);
+  const expected=[69,71,72,76,74,72,71,69,67,69,71,72,69,67,64,69];
+  const pitches=preview.notes.map(n=>n.pitch);
+  if(pitches.length<expected.length||pitches.length>expected.length+2||expected.some((pitch,i)=>pitches[i]!==pitch))
+    throw Error(`Unexpected SheetSage2 melody: ${JSON.stringify(pitches)}`);
+  const generated={};
+  for(const instrument of ['piano','guitar','bass','drums']){
+    state.mp3Instrument=instrument;$('mp3Instrument').value=instrument;
+    state.trackIds=['bass','drums'].includes(instrument)?[]:[track.id];
+    state.difficulty='full';renderTracks();
+    await generate();
+    if(!$('score').querySelector('svg')||!state.entry||state.entry.instrument!==instrument)
+      throw Error(`${instrument} SheetSage2 score did not render`);
+    const loaded=await window.scoresprout.loadVersion(source.id,state.entry.id);
+    if(!loaded.version.notes.length||!loaded.version.provenance)
+      throw Error(`${instrument} arrangement missing notes or provenance`);
+    generated[instrument]={id:state.entry.id,noteCount:loaded.version.notes.length,
+      midi:await window.scoresprout.exportVersion(source.id,state.entry.id,'mid'),
+      xml:await window.scoresprout.exportVersion(source.id,state.entry.id,'musicxml')};
+  }
+  const rawMidi=await window.scoresprout.exportSourceMidi(source.id);
+  return {songId:source.id,pitches,rawMidi,generated,scoreRendered:true};
+})()
