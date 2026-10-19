@@ -4,43 +4,73 @@ const levels = { beginner:'新手版', intermediate:'进阶版', full:'完整版
 const instruments = ['piano','guitar','bass','drums'];
 const state = { source:null, trackIds:[], assignments:{}, mp3Instrument:'piano', difficulty:'beginner', entry:null, library:[], previewingTrackId:null, pendingDelete:null, deleting:false };
 const formatTime = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-let scoreCursor=null,scoreCursorTicks=[],scoreCursorIndex=0,scoreCursorShown=false,scorePpq=480,scoreBpm=120;
-function moveScoreCursor(seconds) {
-  if(!scoreCursor||!scoreCursorTicks.length)return;
-  if(!player.playing&&seconds===0){scoreCursor.hide();scoreCursor.cursorElement.style.display='none';scoreCursorShown=false;return;}
+let scorePlayhead=null,scoreAnchors=[],scoreAnchorIndex=-1,scoreFrame=0,scorePpq=480,scoreBpm=120;
+function clearScoreCursor() {
+  if(scoreFrame)cancelAnimationFrame(scoreFrame);
+  scoreFrame=0;scorePlayhead?.remove();scorePlayhead=null;scoreAnchors=[];scoreAnchorIndex=-1;
+}
+function paintScoreCursor(seconds) {
+  if(!scorePlayhead||!scoreAnchors.length)return;
+  if(!player.playing&&seconds===0){scorePlayhead.style.display='none';scoreAnchorIndex=-1;return;}
   const tick=seconds*scoreBpm*scorePpq/60;
-  let low=0,high=scoreCursorTicks.length;
-  while(low<high){const mid=(low+high)>>1;if(scoreCursorTicks[mid]<=tick+.01)low=mid+1;else high=mid;}
-  const target=Math.max(0,low-1);
-  if(target<scoreCursorIndex){scoreCursor.reset();scoreCursorIndex=0;}
-  if(target!==scoreCursorIndex){
-    while(scoreCursorIndex<target){scoreCursor.next();scoreCursorIndex++;}
-    scoreCursorShown=false;
-  }
-  if(!scoreCursorShown){
-    scoreCursor.show();scoreCursorShown=true;
-    // OSMD 1.9.x leaves display:none on its cursor image after show().
-    scoreCursor.cursorElement.style.display='block';
-    scoreCursor.cursorElement.style.zIndex='10';
-    const shell=$('score').parentElement,rect=scoreCursor.cursorElement.getBoundingClientRect();
-    const view=shell.getBoundingClientRect();
+  let low=0,high=scoreAnchors.length;
+  while(low<high){const mid=(low+high)>>1;if(scoreAnchors[mid].tick<=tick+.01)low=mid+1;else high=mid;}
+  const index=Math.max(0,low-1),current=scoreAnchors[index],next=scoreAnchors[index+1];
+  let x=current.x;
+  if(next&&next.page===current.page&&Math.abs(next.y-current.y)<4&&next.tick>current.tick)
+    x+=(next.x-current.x)*Math.max(0,Math.min(1,(tick-current.tick)/(next.tick-current.tick)));
+  if(scorePlayhead.parentElement!==current.page)current.page.append(scorePlayhead);
+  scorePlayhead.style.height=`${current.height}px`;
+  scorePlayhead.style.transform=`translate3d(${x-1}px,${current.y}px,0)`;
+  scorePlayhead.style.display='block';
+  if(index!==scoreAnchorIndex){
+    scoreAnchorIndex=index;
+    const shell=$('score').parentElement,rect=scorePlayhead.getBoundingClientRect(),view=shell.getBoundingClientRect();
     if(rect.top<view.top+16||rect.bottom>view.bottom-16)
       shell.scrollTop+=rect.top-view.top-shell.clientHeight/3;
     if(rect.left<view.left+16||rect.right>view.right-16)
       shell.scrollLeft+=rect.left-view.left-shell.clientWidth/3;
   }
 }
+function animateScoreCursor() {
+  scoreFrame=0;
+  if(!player.playing)return;
+  paintScoreCursor(Math.min(player.duration,player.ctx.currentTime-player.base));
+  scoreFrame=requestAnimationFrame(animateScoreCursor);
+}
+function moveScoreCursor(seconds) {
+  paintScoreCursor(seconds);
+  if(player.playing){if(!scoreFrame)scoreFrame=requestAnimationFrame(animateScoreCursor);}
+  else if(scoreFrame){cancelAnimationFrame(scoreFrame);scoreFrame=0;}
+}
 function attachScoreCursor(osmd,version) {
-  const cursor=osmd.cursor;
-  cursor.reset();cursor.hide();
-  const iterator=cursor.iterator.clone(),ticks=[];
-  for(let i=0;i<20000&&!iterator.EndReached;i++){
-    const tick=Math.max(0,Math.round(iterator.currentTimeStamp.RealValue*version.ppq*4));
-    ticks.push(tick);
-    iterator.moveToNextVisibleVoiceEntry(false);
+  const cursor=osmd.cursor,wanted=new Set(version.notes.map(note=>note.start));
+  const pageRects=new Map(),anchors=[];
+  cursor.reset();cursor.show();
+  for(let i=0;i<40000&&!cursor.iterator.EndReached&&anchors.length<wanted.size;i++){
+    const tick=Math.max(0,Math.round(cursor.iterator.currentTimeStamp.RealValue*version.ppq*4));
+    if(wanted.has(tick)&&anchors.at(-1)?.tick!==tick){
+      const page=cursor.cursorElement.parentElement;
+      if(!pageRects.has(page))pageRects.set(page,page.getBoundingClientRect());
+      const pageLeft=pageRects.get(page).left,xs=[];
+      for(const note of cursor.GNotesUnderCursor()){
+        if(note.sourceNote?.isRest())continue;
+        for(const head of note.getNoteheadSVGs?.()||[]){
+          const rect=head.getBoundingClientRect();
+          if(rect.width>0)xs.push(rect.left+rect.width/2-pageLeft);
+        }
+      }
+      xs.sort((a,b)=>a-b);
+      const native=cursor.cursorElement;
+      anchors.push({tick,page,x:xs.length?xs[Math.floor(xs.length/2)]:parseFloat(native.style.left)+native.width/2,
+        y:parseFloat(native.style.top),height:native.height});
+    }
+    cursor.next();
   }
-  scoreCursor=cursor;scoreCursorTicks=ticks;scoreCursorIndex=0;scoreCursorShown=false;
-  scorePpq=version.ppq;scoreBpm=version.bpm;
+  cursor.hide();cursor.cursorElement.style.display='none';
+  if(!anchors.length)throw new Error('无法定位谱面音符，请尝试重新生成乐谱。');
+  scorePlayhead=document.createElement('div');scorePlayhead.className='score-playhead';
+  scoreAnchors=anchors;scoreAnchorIndex=-1;scorePpq=version.ppq;scoreBpm=version.bpm;
 }
 const player = new ScorePlayer((now,total) => {
   $('currentTime').textContent=formatTime(now);
@@ -121,7 +151,7 @@ function renderTracks() {
 }
 function showSource(source) {
   player.stop(); previewPlayer.stop(); state.source=source; state.entry=null; state.mp3Instrument='piano';
-  scoreCursor=null;scoreCursorTicks=[];
+  clearScoreCursor();
   state.trackIds=source.tracks.length?[source.tracks[0].id]:[]; state.assignments={}; resetPreviewButtons();
   $('emptyState').classList.add('hidden'); $('workspace').classList.remove('hidden'); $('result').classList.add('hidden');
   $('songTitle').value=source.title; $('pageTitle').textContent=source.title;
@@ -190,7 +220,7 @@ async function confirmDeleteScore() {
     const result=await window.scoresprout.deleteVersion(item.songId,item.id);
     if (state.entry?.id===item.id && state.entry?.songId===item.songId) {
       player.load([],120,'piano'); previewPlayer.stop(); resetPreviewButtons();
-      scoreCursor=null;scoreCursorTicks=[];
+      clearScoreCursor();
       state.entry=null; $('playBtn').textContent='▶';
       $('score').replaceChildren(); $('result').classList.add('hidden');
     }
@@ -204,7 +234,7 @@ async function confirmDeleteScore() {
 }
 async function renderVersion(data) {
   previewPlayer.stop(); resetPreviewButtons(); state.entry=data.entry||data;
-  scoreCursor=null;scoreCursorTicks=[];
+  clearScoreCursor();
   const v=data.version; player.load(v.notes,v.bpm,v.instrument); $('playBtn').textContent='▶';
   $('result').classList.remove('hidden');
   $('resultTitle').textContent=`${v.title} · ${levels[v.difficulty]}`;

@@ -38,6 +38,6 @@ const audioDir=path.join(data,'library',mp3.songId);
 if(!mp3.rendered||!mp3Reload.persisted||mp3Reload.songId!==mp3.songId||
   !fs.existsSync(path.join(audioDir,'original.mp3'))||!fs.existsSync(path.join(audioDir,'original.mid')))
   throw Error('MP3 转写或保存验收未通过。');
-if(!playhead.visible||!playhead.playing||playhead.seekIndex<=0)
+if(!playhead.visible||!playhead.interpolated||!playhead.playing||playhead.seekIndex<=0)
   throw Error('谱面播放竖线验收未通过。');
 console.log(`验收通过：MIDI 导入与生成、MP3 解码与固定转写夹具、谱面、导出、删除和重启读取。SheetSage2 音准需另行验证。\n结果目录：${runRoot}`);

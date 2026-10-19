@@ -4,18 +4,36 @@
   const track=source.tracks.find(t=>t.detected==='piano')||source.tracks[0];
   const generated=await window.scoresprout.generate(source.id,track.id,track.detected,'full',source.title,false);
   await renderVersion(generated);
-  if(!scoreCursor||scoreCursorTicks.length<2)throw Error('谱面光标没有关联音符');
+  if(!scorePlayhead||scoreAnchors.length<2)throw Error('谱面光标没有关联音符');
+  const pair=scoreAnchors.findIndex((anchor,index)=>{
+    const next=scoreAnchors[index+1];
+    return next&&anchor.page===next.page&&Math.abs(anchor.y-next.y)<4&&next.tick>anchor.tick;
+  });
+  if(pair<0)throw Error('没有可供连续移动的相邻音符');
+  const first=scoreAnchors[pair],second=scoreAnchors[pair+1];
+  const midpoint=(first.tick+second.tick)/2*60/(generated.version.bpm*generated.version.ppq);
+  paintScoreCursor(midpoint);
+  const actual=scorePlayhead.getBoundingClientRect().left-first.page.getBoundingClientRect().left+1;
+  if(Math.abs(actual-(first.x+second.x)/2)>1.5)throw Error('竖线没有在相邻音符之间平滑插值');
+  const wrap=scoreAnchors.findIndex((anchor,index)=>scoreAnchors[index+1]&&
+    (anchor.page!==scoreAnchors[index+1].page||Math.abs(anchor.y-scoreAnchors[index+1].y)>=4));
+  if(wrap>=0){
+    const next=scoreAnchors[wrap+1];
+    paintScoreCursor(next.tick*60/(generated.version.bpm*generated.version.ppq));
+    const y=scorePlayhead.getBoundingClientRect().top-next.page.getBoundingClientRect().top;
+    if(Math.abs(y-next.y)>1.5)throw Error('换行后竖线没有切到新谱表');
+  }
   await player.play();
   await new Promise(resolve=>setTimeout(resolve,650));
-  const rect=scoreCursor?.cursorElement?.getBoundingClientRect();
-  if(!player.playing||!scoreCursorShown||!scoreCursor.cursorElement.isConnected||
-    scoreCursor.cursorElement.style.display!=='block'||!rect||rect.width<4||rect.height<50)
+  const rect=scorePlayhead.getBoundingClientRect();
+  if(!player.playing||!scorePlayhead.isConnected||
+    scorePlayhead.style.display!=='block'||rect.width<2||rect.height<50)
     throw Error('播放时谱面竖线不可见');
   player.pause();player.seek(2);
-  if(scoreCursorIndex===0)throw Error('进度跳转没有移动谱面竖线');
-  const seekIndex=scoreCursorIndex;
+  if(scoreAnchorIndex===0)throw Error('进度跳转没有移动谱面竖线');
+  const seekIndex=scoreAnchorIndex;
   player.stop();
-  if(scoreCursor.cursorElement.style.display!=='none')throw Error('停止后竖线没有隐藏');
+  if(scorePlayhead.style.display!=='none')throw Error('停止后竖线没有隐藏');
   await player.play();
-  return {visible:true,seekIndex,playing:player.playing,notes:generated.version.notes.length};
+  return {visible:true,interpolated:true,wrapped:wrap>=0,seekIndex,playing:player.playing,notes:generated.version.notes.length};
 })()
