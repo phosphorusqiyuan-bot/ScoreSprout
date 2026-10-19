@@ -76,7 +76,7 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 ## 第一版的明确限制
 
 - MIDI 生成谱使用文件开头的速度和拍号；多次速度或拍号变化会提示。没有速度信息时用 120 BPM。MP3 在有足够节拍数据时估计记谱速度，原始转写 MIDI 仍保留模型的时间基准。
-- 三档难度都将保留的音符量化到十六分音符，简化主要通过减少音符和和弦密度完成，不再把保留的音符强行提前到整拍。复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱。延音踏板会延长音符时值，但谱面不显示踏板符号；量化仍可能造成小幅时间偏差。
+- 完整版将保留的音符量化到六十四分音符，进阶版为三十二分音符，新手版为十六分音符；简化主要通过减少音符和和弦密度完成。复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱。延音踏板会延长音符时值，但谱面不显示踏板符号；量化仍可能造成小幅时间偏差。
 - 简化是可重复的规则处理，不保证所有曲目仍有理想的音乐表现。吉他使用高音谱表，暂不生成六线谱或指法；鼓谱支持常见鼓组映射，罕见打击乐音高可能使用通用位置。
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
 - 暂不导出 PDF，也未制作安装包。可将 MusicXML 交给 MuseScore 等工具继续编辑或导出 PDF。
@@ -159,7 +159,7 @@ We did not find a mature drop-in project that takes only a melody and is fully a
 ### Known limits of the first release
 
 - MIDI scores use the initial tempo and time signature; later changes produce a warning. Missing tempo defaults to 120 BPM. MP3 scores estimate notation tempo when enough beats are available, while the raw transcription MIDI keeps its model time base.
-- All three difficulties quantize retained notes to sixteenth notes. Simplification reduces note and chord density without pulling retained notes to whole-beat boundaries. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Quantization can still cause small timing differences.
+- Full quantizes retained notes to sixty-fourth notes, Intermediate to thirty-second notes, and Beginner to sixteenth notes. Simplification reduces note and chord density without pulling retained notes to whole-beat boundaries. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Quantization can still cause small timing differences.
 - Simplification is deterministic and may need manual musical editing. Guitar uses a treble staff, without tablature or fingering. Drum notation maps common kit sounds; unusual percussion may use a generic position.
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
 - PDF export and a packaged installer are not included. Open the MusicXML in MuseScore or another notation editor to refine it or export a PDF.

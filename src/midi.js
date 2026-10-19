@@ -197,7 +197,10 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
     if (!groups.has(target)) groups.set(target, []);
     groups.get(target).push(track);
   }
-  const ppq = 480, grid = 120;
+  const ppq = 480;
+  // Full scores need a finer grid: a sixteenth-note snap can move a note by
+  // 62.5 ms at 120 BPM, which audibly changes swung or freely played rhythms.
+  const grid = {full:30,intermediate:60,beginner:120}[difficulty];
   const parts = [];
   for (const target of ['piano','guitar','bass','drums']) {
     const selected = groups.get(target);

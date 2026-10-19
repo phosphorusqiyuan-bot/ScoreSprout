@@ -13,7 +13,7 @@ class ScorePlayer {
         this.sound(n,ctx.currentTime,end-this.position);
     }
     this.timer=setInterval(()=>this.tick(),25); this.tick(); }
-  tick() { if (!this.playing) return; const ctx=this.ctx, now=ctx.currentTime, horizon=now+.35;
+  tick() { if (!this.playing) return; const ctx=this.ctx, now=ctx.currentTime, horizon=now+1.2;
     while (this.next<this.notes.length) { const n=this.notes[this.next], when=this.base+n.start*60/(this.bpm*480); if (when>horizon) break;
       const end=when+n.duration*60/(this.bpm*480),start=Math.max(now,when);
       if(end>now)this.sound(n,start,Math.max(.03,end-start));

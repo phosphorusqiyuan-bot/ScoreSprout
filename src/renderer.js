@@ -7,7 +7,7 @@ const formatTime = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart
 let scoreCursor=null,scoreCursorTicks=[],scoreCursorIndex=0,scoreCursorShown=false,scorePpq=480,scoreBpm=120;
 function moveScoreCursor(seconds) {
   if(!scoreCursor||!scoreCursorTicks.length)return;
-  if(!player.playing&&seconds===0){scoreCursor.hide();scoreCursorShown=false;return;}
+  if(!player.playing&&seconds===0){scoreCursor.hide();scoreCursor.cursorElement.style.display='none';scoreCursorShown=false;return;}
   const tick=seconds*scoreBpm*scorePpq/60;
   let low=0,high=scoreCursorTicks.length;
   while(low<high){const mid=(low+high)>>1;if(scoreCursorTicks[mid]<=tick+.01)low=mid+1;else high=mid;}
@@ -19,6 +19,9 @@ function moveScoreCursor(seconds) {
   }
   if(!scoreCursorShown){
     scoreCursor.show();scoreCursorShown=true;
+    // OSMD 1.9.x leaves display:none on its cursor image after show().
+    scoreCursor.cursorElement.style.display='block';
+    scoreCursor.cursorElement.style.zIndex='10';
     const shell=$('score').parentElement,rect=scoreCursor.cursorElement.getBoundingClientRect();
     const view=shell.getBoundingClientRect();
     if(rect.top<view.top+16||rect.bottom>view.bottom-16)
@@ -213,7 +216,7 @@ async function renderVersion(data) {
   const target=$('score'); target.replaceChildren();
   if (!window.opensheetmusicdisplay) throw new Error('乐谱渲染组件未加载。请重新安装依赖。');
   const osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay(target,{
-    autoResize:true,backend:'svg',drawTitle:false,drawComposer:false,drawPartNames:v.parts?.length>1,
+    autoResize:false,backend:'svg',drawTitle:false,drawComposer:false,drawPartNames:v.parts?.length>1,
     cursorsOptions:[{type:1,color:'#4eac62',alpha:.9,follow:false}]
   });
   await osmd.load(data.musicxml); osmd.render();attachScoreCursor(osmd,v);

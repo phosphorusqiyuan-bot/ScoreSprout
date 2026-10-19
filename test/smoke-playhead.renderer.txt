@@ -1,0 +1,21 @@
+(async()=>{
+  const source=await window.scoresprout.importMidi();
+  showSource(source);
+  const track=source.tracks.find(t=>t.detected==='piano')||source.tracks[0];
+  const generated=await window.scoresprout.generate(source.id,track.id,track.detected,'full',source.title,false);
+  await renderVersion(generated);
+  if(!scoreCursor||scoreCursorTicks.length<2)throw Error('谱面光标没有关联音符');
+  await player.play();
+  await new Promise(resolve=>setTimeout(resolve,650));
+  const rect=scoreCursor?.cursorElement?.getBoundingClientRect();
+  if(!player.playing||!scoreCursorShown||!scoreCursor.cursorElement.isConnected||
+    scoreCursor.cursorElement.style.display!=='block'||!rect||rect.width<4||rect.height<50)
+    throw Error('播放时谱面竖线不可见');
+  player.pause();player.seek(2);
+  if(scoreCursorIndex===0)throw Error('进度跳转没有移动谱面竖线');
+  const seekIndex=scoreCursorIndex;
+  player.stop();
+  if(scoreCursor.cursorElement.style.display!=='none')throw Error('停止后竖线没有隐藏');
+  await player.play();
+  return {visible:true,seekIndex,playing:player.playing,notes:generated.version.notes.length};
+})()

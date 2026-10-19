@@ -40,3 +40,15 @@ test('播放到曲末后自动停止并通知界面',()=>{
   player.tick();
   assert.equal(ended,1);assert.equal(player.playing,false);assert.equal(player.position,0);
 });
+test('提前安排音符，谱面更新稍慢时仍保持原始拍点',()=>{
+  const window={};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..','src','audio.js'),'utf8'),{window});
+  const scheduled=[];
+  const player=new window.ScorePlayer(()=>{},()=>{});
+  player.ctx={currentTime:0};player.base=0;player.bpm=120;player.duration=2;player.playing=true;
+  player.notes=[{start:480,duration:120,pitch:60},{start:960,duration:120,pitch:62}];
+  player.next=0;player.sound=(note,start)=>scheduled.push([note.pitch,start]);
+  player.tick();
+  assert.deepEqual(scheduled,[[60,.5],[62,1]]);
+  assert.equal(player.next,2);
+});

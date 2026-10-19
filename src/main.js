@@ -246,10 +246,12 @@ app.whenReady().then(() => {
   if (process.env.SCORESPROUT_SMOKE_STAGE) win.webContents.once('did-finish-load',async()=>{
     try {
       const stage=process.env.SCORESPROUT_SMOKE_STAGE;
+      if(stage==='playhead')win.showInactive();
       const script=fs.readFileSync(path.join(__dirname,'..','test',`smoke-${stage}.renderer.txt`),'utf8');
       const result=await win.webContents.executeJavaScript(script,true);
       const out=path.join(process.env.SCORESPROUT_TEST_DATA,`smoke-${stage}.json`);writeJSON(out,result);
       if(stage==='reload') { await win.webContents.executeJavaScript("document.body.innerHTML=document.querySelector('#score svg').outerHTML;document.body.style.background='white'",true); win.showInactive(); await new Promise(resolve=>setTimeout(resolve,500)); fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-reload.png'),(await win.webContents.capturePage()).toPNG()); }
+      if(stage==='playhead') { await new Promise(resolve=>setTimeout(resolve,300)); fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-playhead.png'),(await win.webContents.capturePage()).toPNG()); }
       console.log(JSON.stringify(result));app.exit(0);
     } catch(e){console.error('SMOKE FAILURE',e);app.exit(1);}
   });

@@ -9,7 +9,7 @@ function pitchXML(pitch, flats) {
   return `<pitch><step>${step}</step>${alter ? `<alter>${alter}</alter>` : ''}<octave>${Math.floor(pitch / 12) - 1}</octave></pitch>`;
 }
 function durationPieces(ticks) {
-  const values = [[1920,'whole'],[960,'half'],[480,'quarter'],[240,'eighth'],[120,'16th']];
+  const values = [[1920,'whole'],[960,'half'],[480,'quarter'],[240,'eighth'],[120,'16th'],[60,'32nd'],[30,'64th']];
   const out = [];
   let remain = ticks;
   for (const [value,type] of values) while (remain >= value) { out.push({ duration:value, type }); remain -= value; }
@@ -69,7 +69,7 @@ function renderPart(version, part, measureCount, measureTicks, partId) {
 }
 function versionToMusicXML(version) {
   const [num,den] = version.timeSignature, measureTicks=version.ppq*4*num/den;
-  if (!Number.isInteger(measureTicks) || measureTicks % 120) throw new Error('此拍号无法用第一版的十六分音符网格记谱。');
+  if (!Number.isInteger(measureTicks) || measureTicks % 30) throw new Error('此拍号无法用第一版的六十四分音符网格记谱。');
   const parts = version.parts?.length ? version.parts : [{instrument:version.instrument,notes:version.notes}];
   const lastTick = Math.max(...parts.flatMap(part=>part.notes.map(n=>n.start+n.duration)));
   const measureCount = Math.max(1,Math.ceil(lastTick/measureTicks));

@@ -57,3 +57,20 @@ test('不同乐器轨道生成多个声部，并保持各自音色的 MIDI 轨�
   assert.equal(midi.tracks.length,4);
   assert(midi.tracks.some(track=>track.some(event=>event.channel===9&&event.type==='noteOn')));
 });
+test('完整版保留自由节奏到六十四分音符精度',()=>{
+  const source={title:'自由节奏',sourcePpq:480,bpm:120,timeSignature:[4,4],keyFifths:0,keyMode:0,
+    tracks:[{id:'solo',name:'钢琴',detected:'piano',notes:[
+      {pitch:60,start:73,duration:451,velocity:80},
+      {pitch:62,start:537,duration:213,velocity:80},
+      {pitch:64,start:811,duration:372,velocity:80}
+    ]}]};
+  const version=generateVersion(source,'solo','piano','full',source.title);
+  for(let i=0;i<source.tracks[0].notes.length;i++){
+    const original=source.tracks[0].notes[i],generated=version.notes[i];
+    assert(Math.abs(generated.start-original.start)<=15);
+    assert(Math.abs(generated.start+generated.duration-original.start-original.duration)<=15);
+  }
+  assert.match(versionToMusicXML(version),/<type>64th<\/type>/);
+  const round=analyzeMidi(versionToMidi(version),'round.mid');
+  assert.deepEqual(round.tracks[0].notes.map(n=>[n.start,n.duration]),version.notes.map(n=>[n.start,n.duration]));
+});
