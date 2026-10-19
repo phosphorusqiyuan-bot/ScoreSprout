@@ -1,9 +1,10 @@
 class ScorePlayer {
-  constructor(onProgress, onEnd) { this.onProgress=onProgress; this.onEnd=onEnd; this.notes=[]; this.playing=false; this.position=0; this.active=[]; }
+  constructor(onProgress, onEnd) { this.onProgress=onProgress; this.onEnd=onEnd; this.notes=[]; this.playing=false; this.position=0; this.active=new Set(); this.generation=0; }
   async context() { if (!this.ctx) this.ctx=new (window.AudioContext||window.webkitAudioContext)(); await this.ctx.resume(); return this.ctx; }
   load(notes,bpm,instrument) { this.stop(); this.notes=[...notes].sort((a,b)=>a.start-b.start); this.bpm=bpm; this.instrument=instrument;
     this.duration=this.notes.length ? Math.max(...this.notes.map(n=>n.start+n.duration))*60/(bpm*480) : 0; this.position=0; this.onProgress(0,this.duration); }
-  async play() { if (this.playing || !this.notes.length) return; const ctx=await this.context();
+  async play() { if (this.playing || !this.notes.length) return; const generation=this.generation,ctx=await this.context();
+    if(generation!==this.generation||this.playing)return;
     if (this.position>=this.duration) this.position=0; this.playing=true; this.base=ctx.currentTime-this.position; this.next=this.notes.findIndex(n=>n.start*60/(this.bpm*480)>=this.position-.001);
     if (this.next<0) this.next=this.notes.length;
     if (this.position>0) for (const n of this.notes) {
@@ -11,10 +12,12 @@ class ScorePlayer {
       if (begin<this.position && end>this.position && (n.instrument||this.instrument)!=='drums')
         this.sound(n,ctx.currentTime,end-this.position);
     }
-    this.timer=setInterval(()=>this.tick(),40); this.tick(); }
-  tick() { if (!this.playing) return; const ctx=this.ctx, now=ctx.currentTime, horizon=now+.22;
+    this.timer=setInterval(()=>this.tick(),25); this.tick(); }
+  tick() { if (!this.playing) return; const ctx=this.ctx, now=ctx.currentTime, horizon=now+.35;
     while (this.next<this.notes.length) { const n=this.notes[this.next], when=this.base+n.start*60/(this.bpm*480); if (when>horizon) break;
-      if (when>=now-.04) this.sound(n,Math.max(now,when),Math.max(.05,n.duration*60/(this.bpm*480))); this.next++; }
+      const end=when+n.duration*60/(this.bpm*480),start=Math.max(now,when);
+      if(end>now)this.sound(n,start,Math.max(.03,end-start));
+      this.next++; }
     const elapsed=now-this.base;
     this.position=Math.max(0,Math.min(this.duration,elapsed)); this.onProgress(this.position,this.duration);
     if (elapsed>=this.duration+.08) { this.stop(); this.onEnd(); }
@@ -22,8 +25,8 @@ class ScorePlayer {
   pause() { if (!this.playing) return; this.position=Math.min(this.duration,this.ctx.currentTime-this.base); this.halt(); this.onProgress(this.position,this.duration); }
   stop() { this.halt(); this.position=0; this.onProgress(0,this.duration||0); }
   seek(seconds) { const was=this.playing; this.halt(); this.position=Math.min(this.duration||0,Math.max(0,seconds)); this.onProgress(this.position,this.duration||0); if (was) this.play(); }
-  halt() { if (this.timer) clearInterval(this.timer); this.timer=null; this.playing=false;
-    for (const node of this.active) { try { node.stop(); } catch {} } this.active=[]; }
+  halt() { this.generation++; if (this.timer) clearInterval(this.timer); this.timer=null; this.playing=false;
+    for (const node of this.active) { try { node.stop(); } catch {} } this.active.clear(); }
   tone(freq,start,duration,shape,level,sustain=.5,filterFreq=0) {
     const ctx=this.ctx, osc=ctx.createOscillator(), gain=ctx.createGain(); osc.type=shape; osc.frequency.setValueAtTime(freq,start);
     const attack=Math.min(.012,duration/4), settle=Math.min(duration,Math.max(attack+.001,Math.min(.12,duration*.35)));
@@ -34,7 +37,8 @@ class ScorePlayer {
     gain.gain.exponentialRampToValueAtTime(.0001,start+duration+release);
     if (filterFreq) { const filter=ctx.createBiquadFilter(); filter.type='lowpass';filter.frequency.value=filterFreq;osc.connect(filter);filter.connect(gain); }
     else osc.connect(gain);
-    gain.connect(ctx.destination);osc.start(start);osc.stop(start+duration+release+.01);this.active.push(osc);
+    gain.connect(ctx.destination);osc.onended=()=>this.active.delete(osc);
+    osc.start(start);osc.stop(start+duration+release+.01);this.active.add(osc);
   }
   noise(start,duration,level,highpass=0) {
     const ctx=this.ctx, len=Math.ceil(ctx.sampleRate*Math.max(duration,.1)), buffer=ctx.createBuffer(1,len,ctx.sampleRate), data=buffer.getChannelData(0);
@@ -42,7 +46,8 @@ class ScorePlayer {
     const src=ctx.createBufferSource(),gain=ctx.createGain();src.buffer=buffer;
     gain.gain.setValueAtTime(level,start);gain.gain.exponentialRampToValueAtTime(.0001,start+duration);
     if (highpass) { const filter=ctx.createBiquadFilter();filter.type='highpass';filter.frequency.value=highpass;src.connect(filter);filter.connect(gain); }
-    else src.connect(gain);gain.connect(ctx.destination);src.start(start);src.stop(start+duration+.01);this.active.push(src);
+    else src.connect(gain);gain.connect(ctx.destination);src.onended=()=>this.active.delete(src);
+    src.start(start);src.stop(start+duration+.01);this.active.add(src);
   }
   sound(note,start,duration) {
     const freq=440*Math.pow(2,(note.pitch-69)/12), velocity=(note.velocity||80)/127;

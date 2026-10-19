@@ -33,7 +33,7 @@ corepack pnpm start
 1. 点击「导入 MIDI 文件」，或先完成模型安装后点击「MP3 提取旋律（SheetSage2）」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。
 2. 查看速度、拍号、调号和轨道列表，修改歌曲名。MIDI 可勾选多条有音符的轨道、试听并手动指定未识别的乐器。MP3 会显示有音符的人声、器乐旋律轨道；分别试听后可勾选一条或两条，并在「生成乐器」中选择钢琴、吉他、贝斯或鼓。轨道预览统一使用钢琴音色。
 3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。选择的 MIDI 钢琴轨道会先合并成一组音符，再由 PM2S 预测左右手，PianoPlayer 给 MusicXML 标注指法；太短的曲目使用音高回退。MP3 只选一条旋律时，右手保留该旋律，左手按预测和弦及节拍编配：新手版以单根音为主，进阶版加入双音，完整版加入三和弦。选两条旋律时仍分别放入左右手。若缺少覆盖旋律的可用和弦，会明确提示并只生成右手。吉他使用所选旋律与预测和弦，贝斯使用预测和弦根音，鼓使用预测节拍。结果区会标明这些是练习编配，不是原曲真实分轨。MIDI 已识别的乐器轨道不能冒充另一种乐器。
-4. 在结果区域播放、暂停、停止或拖动进度。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
+4. 在结果区域播放、暂停、停止或拖动进度。播放时谱面上的竖线跟随当前音符，拖动进度后也会跳到对应位置。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
 5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。再次选择难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
 6. 点击音乐库条目旁的「删除」或结果区的「删除乐谱」，确认后移除此版本。原始 MIDI、其他版本和已导出的文件会保留；当前打开的版本被删除时，播放会停止，仍可重新生成。
 
@@ -65,10 +65,18 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 
 应用主进程负责本地文件访问；渲染进程通过受限的 preload API 与主进程通信。导入和生成不向外部服务发送数据。
 
+### 左手自动伴奏项目调研
+
+- [AccoMontage2](https://github.com/billyblu2000/accomontage2)（MIT）能从旋律 MIDI 自动生成和弦与钢琴伴奏，不依赖语言模型。但其示例接口仍要求提供调性、乐句分段，目前只支持 4/4，运行还需额外数据文件和依赖；不适合作为当前 Windows 桌面版的直接替换。
+- [AccoMontage](https://github.com/zhaojw1998/AccoMontage)（MIT）结合规则优化与学习式风格迁移，需要检查点和伴奏素材，适合后续研究，不是轻量的纯规则左手生成器。
+- [MidiGen](https://github.com/cainky/midigen) 提供确定性的和弦连接与琶音组件，无大型模型，但需要先有和弦进行，且为 AGPL-3.0。当前项目未复制或依赖其代码。
+
+目前没有发现能直接接入、同时满足「仅输入单旋律、全自动、轻量、纯规则」的成熟项目。ScoreSprout 继续用本地可复现的和弦与节拍规则编配左手；后续改善重点是和弦准确率、和弦转位与声部连接，输出始终标注为自动编配。
+
 ## 第一版的明确限制
 
-- 生成谱统一使用文件开头的速度和拍号；多次速度或拍号变化会提示。没有速度信息时用 120 BPM。
-- 节奏量化到十六分音符（完整版）、八分音符（进阶版）或四分音符（新手版）；复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱。延音踏板会延长音符时值，但谱面不显示踏板符号。完整版仍可能因量化而与原 MIDI 的微小时间偏差不同。
+- MIDI 生成谱使用文件开头的速度和拍号；多次速度或拍号变化会提示。没有速度信息时用 120 BPM。MP3 在有足够节拍数据时估计记谱速度，原始转写 MIDI 仍保留模型的时间基准。
+- 三档难度都将保留的音符量化到十六分音符，简化主要通过减少音符和和弦密度完成，不再把保留的音符强行提前到整拍。复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱。延音踏板会延长音符时值，但谱面不显示踏板符号；量化仍可能造成小幅时间偏差。
 - 简化是可重复的规则处理，不保证所有曲目仍有理想的音乐表现。吉他使用高音谱表，暂不生成六线谱或指法；鼓谱支持常见鼓组映射，罕见打击乐音高可能使用通用位置。
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
 - 暂不导出 PDF，也未制作安装包。可将 MusicXML 交给 MuseScore 等工具继续编辑或导出 PDF。
@@ -106,7 +114,7 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 1. Click **导入 MIDI 文件** (Import MIDI file) or **MP3 提取旋律（SheetSage2）** after model setup. The app copies the file to its local library without changing the original. For an MP3, **导出转写 MIDI** exports the raw transcription immediately.
 2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. MIDI tracks can be previewed, selected together, and assigned an instrument when unidentified. MP3 results show vocal and instrumental melody tracks when notes are present. Preview and select one or both, then choose an output instrument. Track previews use piano sound.
 3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). Selected MIDI piano notes are combined before PM2S assigns hands; PianoPlayer annotates the resulting MusicXML. Very short passages fall back to a pitch split. For a single MP3 melody, the right hand keeps the melody and the left hand is arranged from predicted chords and beats; Beginner favors single bass notes, Intermediate adds dyads, and Full adds triads. With two selected melodies, each takes one hand. If no usable chords cover the melody, the app explains why it keeps only the right hand. Guitar combines a selected melody with predicted chords; bass uses chord roots; drums use predicted beats. These are practice arrangements, not transcriptions of the source instruments. A recognized MIDI instrument track cannot be relabeled as another instrument.
-4. Play, pause, stop, or seek through the result. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
+4. Play, pause, stop, or seek through the result. A vertical cursor follows the current note and moves when seeking. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
 5. Reopen saved versions from the local library, or filter by song, instrument, and difficulty. Generate another difficulty to save another version. Different instruments of the same song have separate internal IDs.
 6. Click **删除** (Delete) beside a library entry or **删除乐谱** (Delete score) in the result panel, then confirm. Only that version is removed; the original MIDI, other versions, and exported files are kept. Deleting the open version stops playback, and you can generate it again from the retained source.
 
@@ -140,10 +148,18 @@ The smoke test launches Electron for MIDI generation, rendering, export, playbac
 
 The main process handles local file access; the renderer communicates through a restricted preload API. Importing and generating do not send song data to an external service.
 
+### Research on automatic left-hand accompaniment
+
+- [AccoMontage2](https://github.com/billyblu2000/accomontage2) (MIT) generates chords and piano accompaniment from melody MIDI without a language model. Its example API still needs a key and phrase segmentation, currently supports only 4/4, and requires additional data and dependencies. It is not a drop-in replacement for the Windows desktop app.
+- [AccoMontage](https://github.com/zhaojw1998/AccoMontage) (MIT) combines rule-based optimization with learned style transfer and needs checkpoints and accompaniment material.
+- [MidiGen](https://github.com/cainky/midigen) has deterministic voice-leading and arpeggio components without a large model, but needs a supplied chord progression and is AGPL-3.0. ScoreSprout does not copy or depend on its code.
+
+We did not find a mature drop-in project that takes only a melody and is fully automatic, lightweight, and purely rule based. ScoreSprout keeps its local deterministic chord-and-beat accompaniment; future improvements should target chord accuracy, inversion choice, and smoother voice leading. The output remains labeled as an arrangement.
+
 ### Known limits of the first release
 
-- The score uses the tempo and time signature at the beginning of the file. The app warns about later changes and assumes 120 BPM when tempo is missing.
-- Rhythm is quantized to sixteenth notes (Full), eighth notes (Intermediate), or quarter notes (Beginner). Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown on the score. Even the Full version may differ slightly from the original MIDI timing.
+- MIDI scores use the initial tempo and time signature; later changes produce a warning. Missing tempo defaults to 120 BPM. MP3 scores estimate notation tempo when enough beats are available, while the raw transcription MIDI keeps its model time base.
+- All three difficulties quantize retained notes to sixteenth notes. Simplification reduces note and chord density without pulling retained notes to whole-beat boundaries. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Quantization can still cause small timing differences.
 - Simplification is deterministic and may need manual musical editing. Guitar uses a treble staff, without tablature or fingering. Drum notation maps common kit sounds; unusual percussion may use a generic position.
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
 - PDF export and a packaged installer are not included. Open the MusicXML in MuseScore or another notation editor to refine it or export a PDF.

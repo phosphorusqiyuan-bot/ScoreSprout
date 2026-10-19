@@ -8,6 +8,7 @@ const { deleteVersion } = require('./library');
 const { transcribeWithSheetSage } = require('./sheetsage2');
 const { transcribedNotesToMidi } = require('./audio-import');
 const { enhancePianoVersion, renameMusicXML } = require('./piano');
+const { parseBeats } = require('./mp3-arrangement');
 const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
 const TRANSCRIPTION_REVISION='sheetsage2-arrangements-v1';
 
@@ -26,6 +27,15 @@ function writeJSON(file, data) { fs.writeFileSync(file, JSON.stringify(data, nul
 function summary(source) { return { ...source, tracks: source.tracks.map(({notes,...t}) => ({ ...t, noteCount: notes.length })) }; }
 function markMp3Source(source) {
   source.inputType='mp3';
+  source.audioBaseBpm=source.bpm;
+  const beats=parseBeats(source.audioAnalysis?.beats);
+  const intervals=beats.slice(1).map((beat,index)=>beat.time-beats[index].time)
+    .filter(seconds=>seconds>=.28&&seconds<=1.5).sort((a,b)=>a-b);
+  if(intervals.length>=3){
+    const estimated=Math.round(60/intervals[Math.floor(intervals.length/2)]);
+    if(estimated>=40&&estimated<=210)source.bpm=estimated;
+    source.timeSignature=[beats[0].numerator,beats[0].denominator];
+  }
   for(const track of source.tracks){
     track.detected='piano';
     const vocal=/vocal/i.test(track.name);
@@ -168,7 +178,7 @@ app.whenReady().then(() => {
   ipcMain.handle('preview-track', wrap((id,trackId) => {
     const {source} = ensureSource(id), track = source.tracks.find(t=>t.id===trackId);
     if (!track) throw new Error('轨道不存在。');
-    return { bpm:source.bpm, instrument:track.detected, notes:track.notes.map(n=>({ ...n,start:n.start*480/source.sourcePpq,duration:n.duration*480/source.sourcePpq })).slice(0,1500) };
+    return { bpm:source.audioBaseBpm||source.bpm, instrument:track.detected, notes:track.notes.map(n=>({ ...n,start:n.start*480/source.sourcePpq,duration:n.duration*480/source.sourcePpq })).slice(0,1500) };
   }));
   ipcMain.handle('generate-version', wrap(async (id,trackIds,choice,difficultyOrTitle,titleOrAssignments,manual) => {
     const {manifest,source} = ensureSource(id);

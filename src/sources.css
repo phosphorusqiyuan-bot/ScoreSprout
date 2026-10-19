@@ -63,6 +63,7 @@
 .delete-error:empty { display: none; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 button:disabled { opacity: .55; cursor: wait; }
+.score-shell img[id^="cursorImg-"] { z-index: 2 !important; pointer-events: none; }
 
 @media (max-width: 1100px) {
   .topbar { flex-wrap: wrap; gap: 18px; }

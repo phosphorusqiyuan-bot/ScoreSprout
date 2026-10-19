@@ -4,10 +4,46 @@ const levels = { beginner:'新手版', intermediate:'进阶版', full:'完整版
 const instruments = ['piano','guitar','bass','drums'];
 const state = { source:null, trackIds:[], assignments:{}, mp3Instrument:'piano', difficulty:'beginner', entry:null, library:[], previewingTrackId:null, pendingDelete:null, deleting:false };
 const formatTime = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+let scoreCursor=null,scoreCursorTicks=[],scoreCursorIndex=0,scoreCursorShown=false,scorePpq=480,scoreBpm=120;
+function moveScoreCursor(seconds) {
+  if(!scoreCursor||!scoreCursorTicks.length)return;
+  if(!player.playing&&seconds===0){scoreCursor.hide();scoreCursorShown=false;return;}
+  const tick=seconds*scoreBpm*scorePpq/60;
+  let low=0,high=scoreCursorTicks.length;
+  while(low<high){const mid=(low+high)>>1;if(scoreCursorTicks[mid]<=tick+.01)low=mid+1;else high=mid;}
+  const target=Math.max(0,low-1);
+  if(target<scoreCursorIndex){scoreCursor.reset();scoreCursorIndex=0;}
+  if(target!==scoreCursorIndex){
+    while(scoreCursorIndex<target){scoreCursor.next();scoreCursorIndex++;}
+    scoreCursorShown=false;
+  }
+  if(!scoreCursorShown){
+    scoreCursor.show();scoreCursorShown=true;
+    const shell=$('score').parentElement,rect=scoreCursor.cursorElement.getBoundingClientRect();
+    const view=shell.getBoundingClientRect();
+    if(rect.top<view.top+16||rect.bottom>view.bottom-16)
+      shell.scrollTop+=rect.top-view.top-shell.clientHeight/3;
+    if(rect.left<view.left+16||rect.right>view.right-16)
+      shell.scrollLeft+=rect.left-view.left-shell.clientWidth/3;
+  }
+}
+function attachScoreCursor(osmd,version) {
+  const cursor=osmd.cursor;
+  cursor.reset();cursor.hide();
+  const iterator=cursor.iterator.clone(),ticks=[];
+  for(let i=0;i<20000&&!iterator.EndReached;i++){
+    const tick=Math.max(0,Math.round(iterator.currentTimeStamp.RealValue*version.ppq*4));
+    ticks.push(tick);
+    iterator.moveToNextVisibleVoiceEntry(false);
+  }
+  scoreCursor=cursor;scoreCursorTicks=ticks;scoreCursorIndex=0;scoreCursorShown=false;
+  scorePpq=version.ppq;scoreBpm=version.bpm;
+}
 const player = new ScorePlayer((now,total) => {
   $('currentTime').textContent=formatTime(now);
   $('totalTime').textContent=formatTime(total);
   $('seek').value=total ? Math.round(now/total*1000) : 0;
+  moveScoreCursor(now);
 }, () => { $('playBtn').textContent='▶'; });
 const previewPlayer = new ScorePlayer(() => {}, resetPreviewButtons);
 function notice(message,type='') {
@@ -82,6 +118,7 @@ function renderTracks() {
 }
 function showSource(source) {
   player.stop(); previewPlayer.stop(); state.source=source; state.entry=null; state.mp3Instrument='piano';
+  scoreCursor=null;scoreCursorTicks=[];
   state.trackIds=source.tracks.length?[source.tracks[0].id]:[]; state.assignments={}; resetPreviewButtons();
   $('emptyState').classList.add('hidden'); $('workspace').classList.remove('hidden'); $('result').classList.add('hidden');
   $('songTitle').value=source.title; $('pageTitle').textContent=source.title;
@@ -150,6 +187,7 @@ async function confirmDeleteScore() {
     const result=await window.scoresprout.deleteVersion(item.songId,item.id);
     if (state.entry?.id===item.id && state.entry?.songId===item.songId) {
       player.load([],120,'piano'); previewPlayer.stop(); resetPreviewButtons();
+      scoreCursor=null;scoreCursorTicks=[];
       state.entry=null; $('playBtn').textContent='▶';
       $('score').replaceChildren(); $('result').classList.add('hidden');
     }
@@ -163,6 +201,7 @@ async function confirmDeleteScore() {
 }
 async function renderVersion(data) {
   previewPlayer.stop(); resetPreviewButtons(); state.entry=data.entry||data;
+  scoreCursor=null;scoreCursorTicks=[];
   const v=data.version; player.load(v.notes,v.bpm,v.instrument); $('playBtn').textContent='▶';
   $('result').classList.remove('hidden');
   $('resultTitle').textContent=`${v.title} · ${levels[v.difficulty]}`;
@@ -174,9 +213,10 @@ async function renderVersion(data) {
   const target=$('score'); target.replaceChildren();
   if (!window.opensheetmusicdisplay) throw new Error('乐谱渲染组件未加载。请重新安装依赖。');
   const osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay(target,{
-    autoResize:true,backend:'svg',drawTitle:false,drawComposer:false,drawPartNames:v.parts?.length>1
+    autoResize:true,backend:'svg',drawTitle:false,drawComposer:false,drawPartNames:v.parts?.length>1,
+    cursorsOptions:[{type:1,color:'#4eac62',alpha:.9,follow:false}]
   });
-  await osmd.load(data.musicxml); osmd.render();
+  await osmd.load(data.musicxml); osmd.render();attachScoreCursor(osmd,v);
   $('result').scrollIntoView({behavior:'smooth',block:'start'}); renderLibrary();
 }
 async function openLibrary(item) {

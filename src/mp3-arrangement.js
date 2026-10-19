@@ -43,13 +43,13 @@ function chordTones(label) {
 function activeChord(chords,time) {
   return chords.find(chord=>chord.start-.05<=time&&time<chord.end+.05&&chordTones(chord.label));
 }
-function secondsToTicks(source,seconds){return Math.round(seconds*source.sourcePpq*source.bpm/60);}
+function secondsToTicks(source,seconds){return Math.round(seconds*source.sourcePpq*(source.audioBaseBpm||source.bpm)/60);}
 function fitOctave(pitch,low,high){while(pitch<low)pitch+=12;while(pitch>high)pitch-=12;return pitch;}
 function median(values){const sorted=[...values].sort((a,b)=>a-b);return sorted[Math.floor(sorted.length/2)];}
 function isVocal(track){return /vocal|人声/i.test(track.name);}
 
 function pianoLeftHand(source,chords,beats,melody,difficulty) {
-  const seconds=ticks=>ticks/source.sourcePpq*60/source.bpm;
+  const seconds=ticks=>ticks/source.sourcePpq*60/(source.audioBaseBpm||source.bpm);
   const first=seconds(Math.min(...melody.map(note=>note.start)));
   const last=seconds(Math.max(...melody.map(note=>note.start+note.duration)));
   const notes=[];

@@ -130,7 +130,7 @@ function selectNotes(notes, instrument, difficulty, ppq) {
   const grid = difficulty === 'beginner' ? ppq : ppq / 2;
   const buckets = new Map();
   for (const n of notes) {
-    const k = difficulty === 'beginner' ? Math.floor(n.start / grid) : Math.round(n.start / grid);
+    const k = Math.floor(n.start / grid);
     if (!buckets.has(k)) buckets.set(k, []);
     buckets.get(k).push(n);
   }
@@ -151,8 +151,9 @@ function selectNotes(notes, instrument, difficulty, ppq) {
       if (difficulty === 'intermediate' && sorted.length > 2) chosen.splice(1, 0, sorted[Math.floor(sorted.length / 2)]);
     }
     for (const n of chosen) {
-      const start = bucket * grid;
-      const copy = { ...n, start, duration: Math.max(grid, n.start + n.duration - start) };
+      // The coarse bucket chooses which notes survive; it must not move their
+      // onsets to the bucket boundary, which changes the melody's rhythm.
+      const copy = { ...n, duration: Math.max(ppq / 4, n.duration) };
       if (instrument !== 'drums') {
         const ranges = { piano: [48,84], guitar: [40,88], bass: [28,60] };
         const [low, high] = ranges[instrument]; copy.pitch = clampPitch(copy.pitch, low, high);
@@ -196,13 +197,14 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
     if (!groups.has(target)) groups.set(target, []);
     groups.get(target).push(track);
   }
-  const ppq = 480, grid = difficulty === 'full' ? 120 : difficulty === 'intermediate' ? 240 : 480;
+  const ppq = 480, grid = 120;
   const parts = [];
   for (const target of ['piano','guitar','bass','drums']) {
     const selected = groups.get(target);
     if (!selected) continue;
+    const tempoScale=source.inputType==='mp3' ? source.bpm/(source.audioBaseBpm||source.bpm) : 1;
     let scaled = selected.flatMap(track => track.notes.map(n => ({ pitch:n.pitch,
-      start:n.start*ppq/source.sourcePpq, duration:n.duration*ppq/source.sourcePpq,
+      start:n.start*ppq/source.sourcePpq*tempoScale, duration:n.duration*ppq/source.sourcePpq*tempoScale,
       velocity:n.velocity,hand:n.hand,sourceTrackId:track.id })))
       .sort((a,b) => a.start-b.start || a.pitch-b.pitch).slice(0,8000);
     const chosen = target==='piano' && source.inputType==='mp3' ?
