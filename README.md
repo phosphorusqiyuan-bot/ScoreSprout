@@ -31,7 +31,7 @@ corepack pnpm start
 ## 使用
 
 1. 点击「导入 MIDI 文件」，或先完成模型安装后点击「MP3 提取旋律（SheetSage2）」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。
-2. 查看速度、拍号、调号和轨道列表，修改歌曲名。MIDI 可勾选多条有音符的轨道、试听并手动指定未识别的乐器。MP3 会显示有音符的人声、器乐旋律轨道；分别试听后可勾选一条或两条，并在「生成乐器」中选择钢琴、吉他、贝斯或鼓。轨道预览统一使用钢琴音色。
+2. 查看速度、拍号、调号和轨道列表，修改歌曲名。已有 MIDI 调号优先使用文件值；没有调号时会从非打击乐音符的音高和时长推断，界面标明「音符推断」。MIDI 可勾选多条有音符的轨道、试听并手动指定未识别的乐器。MP3 会显示有音符的人声、器乐旋律轨道；分别试听后可勾选一条或两条，并在「生成乐器」中选择钢琴、吉他、贝斯或鼓。轨道预览统一使用钢琴音色。
 3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。选择的 MIDI 钢琴轨道会先合并成一组音符，再由 PM2S 预测左右手，PianoPlayer 给 MusicXML 标注指法；太短的曲目使用音高回退。MP3 只选一条旋律时，右手保留该旋律，左手按预测和弦及节拍编配：新手版以单根音为主，进阶版加入双音，完整版加入三和弦。选两条旋律时仍分别放入左右手。若缺少覆盖旋律的可用和弦，会明确提示并只生成右手。吉他使用所选旋律与预测和弦，贝斯使用预测和弦根音，鼓使用预测节拍。结果区会标明这些是练习编配，不是原曲真实分轨。MIDI 已识别的乐器轨道不能冒充另一种乐器。
 4. 在结果区域播放、暂停、停止或拖动进度。播放时谱面上的竖线按播放时间在音符之间平滑移动，并对齐符头；换行时切换到下一行，拖动进度后也会跳到对应位置。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
 5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。再次选择难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
@@ -58,6 +58,7 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 
 - [Electron](https://www.electronjs.org/docs/latest/)：提供 Windows 桌面窗口、本地文件对话框和离线存储。
 - [midi-file](https://github.com/carter-thaxton/midi-file)：读写标准 MIDI 事件；按轨道、通道与 Program Change 拆分音符。
+- 调性分析参考 [music21 的 Krumhansl-Schmuckler 音高分布算法](https://music21.org/music21docs/moduleReference/moduleAnalysisDiscrete.html)：在应用内用 JavaScript 按音符时长统计并比较大小调轮廓，MIDI 用户无需安装 Python。
 - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay)：把生成的 MusicXML 在应用内渲染为五线谱。
 - Web Audio API：本地合成钢琴、拨弦吉他、贝斯与鼓音色，按生成音符调度播放。
 - Chromium 解码 MP3；[SheetSage2](https://huggingface.co/m-a-p/SheetSage2) 与其 [MERT-v2-FullSong](https://huggingface.co/m-a-p/MERT-v2-FullSong) 编码器在本机提取人声和器乐旋律。模型权重采用 CC BY-NC 4.0，仅适合符合该许可的非商业用途；模型代码由 Hugging Face 在本地执行，安装时应信任官方仓库。音频不会上传。
@@ -76,6 +77,7 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 ## 第一版的明确限制
 
 - MIDI 生成谱使用文件开头的速度和拍号；多次速度或拍号变化会提示。没有速度信息时用 120 BPM。MP3 在有足够节拍数据时估计记谱速度，原始转写 MIDI 仍保留模型的时间基准。
+- 调性推断给出的是整曲最可能的调号，不处理局部转调；短旋律、调性模糊或只有鼓的 MIDI 不会猜测调号，谱面暂用无升降号。文件自带调号与音符推断不同时，仍采用文件调号，推断结果可在调号提示中查看。已存的旧版本不会自动改写；重新生成后才使用新的推断结果。
 - 完整版将保留的音符量化到六十四分音符，进阶版为三十二分音符，新手版为十六分音符；简化主要通过减少音符和和弦密度完成。复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱。延音踏板会延长音符时值，但谱面不显示踏板符号；量化仍可能造成小幅时间偏差。
 - 简化是可重复的规则处理，不保证所有曲目仍有理想的音乐表现。吉他使用高音谱表，暂不生成六线谱或指法；鼓谱支持常见鼓组映射，罕见打击乐音高可能使用通用位置。
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
@@ -112,7 +114,7 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 ### Use
 
 1. Click **导入 MIDI 文件** (Import MIDI file) or **MP3 提取旋律（SheetSage2）** after model setup. The app copies the file to its local library without changing the original. For an MP3, **导出转写 MIDI** exports the raw transcription immediately.
-2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. MIDI tracks can be previewed, selected together, and assigned an instrument when unidentified. MP3 results show vocal and instrumental melody tracks when notes are present. Preview and select one or both, then choose an output instrument. Track previews use piano sound.
+2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. An explicit MIDI key signature takes priority; when it is absent, the app estimates a key from the pitch and duration of non-percussion notes and labels it as inferred. MIDI tracks can be previewed, selected together, and assigned an instrument when unidentified. MP3 results show vocal and instrumental melody tracks when notes are present. Preview and select one or both, then choose an output instrument. Track previews use piano sound.
 3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). Selected MIDI piano notes are combined before PM2S assigns hands; PianoPlayer annotates the resulting MusicXML. Very short passages fall back to a pitch split. For a single MP3 melody, the right hand keeps the melody and the left hand is arranged from predicted chords and beats; Beginner favors single bass notes, Intermediate adds dyads, and Full adds triads. With two selected melodies, each takes one hand. If no usable chords cover the melody, the app explains why it keeps only the right hand. Guitar combines a selected melody with predicted chords; bass uses chord roots; drums use predicted beats. These are practice arrangements, not transcriptions of the source instruments. A recognized MIDI instrument track cannot be relabeled as another instrument.
 4. Play, pause, stop, or seek through the result. A vertical playhead moves smoothly between noteheads in time, switches at line breaks, and moves when seeking. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
 5. Reopen saved versions from the local library, or filter by song, instrument, and difficulty. Generate another difficulty to save another version. Different instruments of the same song have separate internal IDs.
@@ -141,6 +143,7 @@ The smoke test launches Electron for MIDI generation, rendering, export, playbac
 
 - [Electron](https://www.electronjs.org/docs/latest/) provides the desktop window, file dialogs, and local storage.
 - [midi-file](https://github.com/carter-thaxton/midi-file) reads and writes standard MIDI events. Notes are separated by track, channel, and Program Change.
+- Key estimation follows [music21's Krumhansl-Schmuckler pitch-class profiles](https://music21.org/music21docs/moduleReference/moduleAnalysisDiscrete.html), implemented in JavaScript so MIDI users do not need Python.
 - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) renders generated MusicXML as staff notation inside the app.
 - The Web Audio API synthesizes piano, plucked guitar, bass, and drum sounds locally from the generated notes.
 - Chromium decodes MP3 locally. [SheetSage2](https://huggingface.co/m-a-p/SheetSage2) and its [MERT-v2-FullSong](https://huggingface.co/m-a-p/MERT-v2-FullSong) encoder extract separate vocal and instrumental melodies locally. Their weights use CC BY-NC 4.0, so use must comply with the noncommercial license. Setup downloads and executes code from the official Hugging Face model repository. Audio stays on the device.
@@ -159,6 +162,7 @@ We did not find a mature drop-in project that takes only a melody and is fully a
 ### Known limits of the first release
 
 - MIDI scores use the initial tempo and time signature; later changes produce a warning. Missing tempo defaults to 120 BPM. MP3 scores estimate notation tempo when enough beats are available, while the raw transcription MIDI keeps its model time base.
+- The inferred key is a whole-piece estimate and does not follow modulations. Short, ambiguous, or percussion-only material is left without a guessed key signature. Explicit MIDI key signatures take priority; hovering over the displayed key shows a differing note-based estimate. Saved variants are not silently rewritten; regenerate a variant to use the new inferred key.
 - Full quantizes retained notes to sixty-fourth notes, Intermediate to thirty-second notes, and Beginner to sixteenth notes. Simplification reduces note and chord density without pulling retained notes to whole-beat boundaries. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Quantization can still cause small timing differences.
 - Simplification is deterministic and may need manual musical editing. Guitar uses a treble staff, without tablature or fingering. Drum notation maps common kit sounds; unusual percussion may use a generic position.
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.

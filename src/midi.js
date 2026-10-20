@@ -1,5 +1,6 @@
 const { parseMidi, writeMidi } = require('midi-file');
 const { arrangeMp3 } = require('./mp3-arrangement');
+const { inferKey } = require('./key-analysis');
 
 const INSTRUMENTS = { piano: '钢琴', guitar: '吉他', drums: '鼓', bass: '贝斯', ensemble: '合奏' };
 const DIFFICULTIES = { beginner: '新手版', intermediate: '进阶版', full: '完整版' };
@@ -106,10 +107,17 @@ function analyzeMidi(input, filename = '未命名.mid') {
   if (!tempos.length) warnings.push('文件没有速度信息，按 120 BPM 处理。');
   if (tempos.length > 1) warnings.push('文件有多次速度变化；第一版生成谱使用初始速度。');
   if (times.length > 1) warnings.push('文件有拍号变化；第一版生成谱使用初始拍号。');
+  if (keys.length > 1) warnings.push('文件有调号变化；生成谱使用初始调号。');
   if (!tracks.length) warnings.push('没有找到可用音符；请检查 MIDI 文件。');
+  const statedKey=keys.find(k=>Number.isInteger(k.key) && k.key>=-7 && k.key<=7 && (k.scale===0 || k.scale===1));
+  if (keys.length && !statedKey) warnings.push('文件中的调号无效，尝试根据音符推断。');
+  const keyAnalysis=inferKey(tracks,sourcePpq);
+  if (!statedKey && !keyAnalysis && tracks.some(t=>t.channel!==9)) warnings.push('音符不足或调性不明确，无法可靠识别调号；乐谱暂用无升降号记谱。');
   return { title, sourcePpq, bpm: Math.round(60000000 / (tempos[0]?.microsecondsPerBeat || 500000)),
     timeSignature: times.length ? [times[0].numerator, times[0].denominator] : [4, 4],
-    keyFifths: keys[0]?.key || 0, keyMode: keys[0]?.scale || 0, keyProvided:keys.length>0, tracks, warnings };
+    keyFifths: statedKey?.key ?? keyAnalysis?.fifths ?? 0,
+    keyMode: statedKey?.scale ?? keyAnalysis?.mode ?? 0,
+    keyProvided:!!statedKey, keyInferred:!statedKey && !!keyAnalysis, keyAnalysis, tracks, warnings };
 }
 
 function clampPitch(p, low, high) {

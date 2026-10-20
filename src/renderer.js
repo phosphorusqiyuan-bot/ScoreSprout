@@ -169,11 +169,20 @@ function showSource(source) {
   $('exportTranscribedMidi').classList.toggle('hidden',source.inputType!=='mp3');
   $('mp3InstrumentField').classList.toggle('hidden',source.inputType!=='mp3');
   $('mp3Instrument').value=state.mp3Instrument;
-  const key=source.keyFifths, namesByFifths=source.keyMode?
-    ['A♭','E♭','B♭','F','C','G','D','A','E','B','F♯','C♯','G♯','D♯','A♯']:
-    ['C♭','G♭','D♭','A♭','E♭','B♭','F','C','G','D','A','E','B','F♯','C♯'];
-  $('keyValue').textContent=source.keyProvided ?
-    `${namesByFifths[Math.max(0,Math.min(14,key+7))]} ${source.keyMode?'小调':'大调'}` : '未提供';
+  const key=source.keyFifths;
+  const keyName=(fifths,mode)=>{
+    const names=mode?
+      ['A♭','E♭','B♭','F','C','G','D','A','E','B','F♯','C♯','G♯','D♯','A♯']:
+      ['C♭','G♭','D♭','A♭','E♭','B♭','F','C','G','D','A','E','B','F♯','C♯'];
+    return `${names[Math.max(0,Math.min(14,fifths+7))]} ${mode?'小调':'大调'}`;
+  };
+  const keyLabel=keyName(key,source.keyMode);
+  $('keyValue').textContent=source.keyProvided ? `${keyLabel}（文件）` :
+    source.keyInferred ? `${keyLabel}（音符推断）` : '无法可靠识别';
+  const guess=source.keyAnalysis;
+  $('keyValue').title=source.keyProvided && guess && (guess.fifths!==key || guess.mode!==source.keyMode) ?
+    `文件调号优先；音符分析倾向 ${keyName(guess.fifths,guess.mode)}，仅供参考。` :
+    source.keyInferred ? '根据非打击乐音符的音高与时长推断；短曲或转调可能不准确。' : '';
   $('trackCount').textContent=String(source.tracks.length);
   $('sourceMeta').textContent=`${source.tracks.reduce((n,t)=>n+t.noteCount,0)} 个音符`;
   renderTracks(); notice(source.warnings.join(' '));
