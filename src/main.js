@@ -236,7 +236,8 @@ app.whenReady().then(() => {
   }));
 
   const win=new BrowserWindow({width:1450,height:930,minWidth:1050,minHeight:700,show:!process.env.SCORESPROUT_SMOKE_STAGE,backgroundColor:'#f7f7f2',
-    webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true} });
+    webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,
+      offscreen:process.env.SCORESPROUT_SMOKE_STAGE==='rhythm-case'} });
   win.webContents.setWindowOpenHandler(({url}) => {
     if (midiSourceUrls.has(url)) shell.openExternal(url);
     return { action:'deny' };
@@ -255,6 +256,10 @@ app.whenReady().then(() => {
       if(stage==='playhead') { await new Promise(resolve=>setTimeout(resolve,300)); fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-playhead.png'),(await win.webContents.capturePage()).toPNG()); }
       if(stage==='polish') {
         fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-polish.png'),(await win.webContents.capturePage()).toPNG());
+      }
+      if(stage==='rhythm-case') {
+        await new Promise(resolve=>setTimeout(resolve,300));
+        fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-rhythm-case.png'),(await win.webContents.capturePage()).toPNG());
       }
       console.log(JSON.stringify(result));app.exit(0);
     } catch(e){console.error('SMOKE FAILURE',e);app.exit(1);}

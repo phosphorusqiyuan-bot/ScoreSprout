@@ -271,7 +271,8 @@ async function renderVersion(data) {
   const pianoInfo=v.pianoProcessing;
   const handLabel={pm2s:'PM2S 左右手','mp3-roles':'人声/器乐左右手','mp3-arrangement':'右手旋律 + 左手自动编配','existing-hands':'保留原有左右手','pitch-short':'短曲按音高分手','pitch-fallback':'按音高回退分手',pitch:'按音高分谱'};
   const pianoDescription=pianoInfo ? ` · ${handLabel[pianoInfo.handMethod]||'左右手已分配'} · ${pianoInfo.fingeringCount?`PianoPlayer 指法 ${pianoInfo.fingeringCount} 处`:'无指法'}` : '';
-  $('resultDetails').textContent=`${names[v.instrument]} · ${v.trackName} · ${v.notes.length} 个音符${pianoDescription}${v.provenance?' · '+v.provenance:''}${pianoInfo?.warning?' · '+pianoInfo.warning:''}`;
+  const tempoDescription=v.rhythmProcessing?`${v.bpm} BPM（按音符节拍整理，文件 ${v.rhythmProcessing.sourceBpm} BPM；试听速度保持）`:`${v.bpm} BPM`;
+  $('resultDetails').textContent=`${names[v.instrument]} · ${v.trackName} · ${tempoDescription} · ${v.notes.length} 个音符${pianoDescription}${v.provenance?' · '+v.provenance:''}${pianoInfo?.warning?' · '+pianoInfo.warning:''}`;
   $('playingInstrument').textContent=names[v.instrument];
   const target=$('score'); target.replaceChildren();
   if (!window.opensheetmusicdisplay) throw new Error('乐谱渲染组件未加载。请重新安装依赖。');

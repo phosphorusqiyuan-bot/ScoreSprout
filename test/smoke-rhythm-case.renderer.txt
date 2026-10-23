@@ -1,0 +1,26 @@
+(async()=>{
+  const source=await window.scoresprout.importMidi();showSource(source);
+  const ids=source.tracks.filter(track=>track.detected!=='drums').map(track=>track.id);
+  const assignments=Object.fromEntries(source.tracks.filter(track=>track.detected==='unknown').map(track=>[track.id,'piano']));
+  const data=await window.scoresprout.generate(source.id,ids,'full',source.title,assignments,null);
+  const v=data.version;
+  if(!v.rhythmProcessing||v.rhythmProcessing.scoreBpm===v.rhythmProcessing.sourceBpm)
+    throw Error('未恢复文件中的实际节拍');
+  await renderVersion(data);
+  const wanted=new Set(v.notes.map(note=>note.start));
+  if(scoreAnchors.length!==wanted.size)throw Error(`首小节或光标时序不一致：${scoreAnchors.length}/${wanted.size}`);
+  if(scoreAnchors[0].tick!==v.notes[0].start)throw Error('首音的谱面与试听起点不一致');
+  const counts={};
+  for(const match of data.musicxml.matchAll(/<note(?:\s[^>]*)?>[\s\S]*?<\/note>/g)) {
+    if(match[0].includes('<rest'))continue;
+    const type=match[0].match(/<type>([^<]+)</)?.[1];counts[type]=(counts[type]||0)+1;
+  }
+  const short=(counts['32nd']||0)+(counts['64th']||0),total=Object.values(counts).reduce((a,b)=>a+b,0);
+  if(short>total*.12)throw Error('谱面仍存在过量的细碎音符');
+  const report={title:source.title,sourceBpm:source.bpm,scoreBpm:v.bpm,pickupTicks:v.rhythmProcessing.pickupTicks,
+    notes:v.notes.length,anchors:scoreAnchors.length,types:counts,processing:v.pianoProcessing};
+  document.body.innerHTML=$('score').querySelector('svg').outerHTML;
+  document.body.style.background='white';
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  return report;
+})()

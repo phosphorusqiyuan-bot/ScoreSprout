@@ -77,7 +77,7 @@ function notesXML(pieces, staff, voice, instrument, flats, hideRests=false) {
   }).join('');
 }
 
-function renderPart(version, part, measureCount, measureTicks, partId) {
+function renderPart(version, part, spans, partId) {
   const [num, den] = version.timeSignature;
   version = { ...version, instrument:part.instrument, notes:part.notes };
   const isPiano = version.instrument === 'piano', isDrums = version.instrument === 'drums';
@@ -90,8 +90,8 @@ function renderPart(version, part, measureCount, measureTicks, partId) {
   const upperVoices=allocateVoices(version.notes.filter(n=>!isPiano || n.hand==='right'||(!n.hand&&n.pitch>=60)));
   const lowerVoices=isPiano?allocateVoices(version.notes.filter(n=>n.hand==='left'||(!n.hand&&n.pitch<60)),true):[];
   const beatTicks=version.ppq*4/den*(den===8&&num%3===0?3:1);
-  for (let m = 0; m < measureCount; m++) {
-    const start = m*measureTicks, end = start+measureTicks;
+  for (let m = 0; m < spans.length; m++) {
+    const {start,end,number,implicit}=spans[m],measureTicks=end-start;
     const attributes = m ? '' : `<attributes><divisions>${version.ppq}</divisions><key><fifths>${version.keyFifths}</fifths><mode>${version.keyMode ? 'minor':'major'}</mode></key><time><beats>${num}</beats><beat-type>${den}</beat-type></time>${isPiano ? '<staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef>' : `<clef>${clef}</clef>`}</attributes><direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${version.bpm}</per-minute></metronome></direction-type><sound tempo="${version.bpm}"/></direction>`;
     const streams=[];
     for(const [voices,staff,base] of [[upperVoices,isPiano?1:null,1],...(isPiano?[[lowerVoices,2,Math.max(1,upperVoices.length)+1]]:[])]) {
@@ -104,7 +104,7 @@ function renderPart(version, part, measureCount, measureTicks, partId) {
       }
       if(!visible)streams.push(notesXML(voicePieces([],start,end,beatTicks),staff,base,version.instrument,version.keyFifths<0));
     }
-    measures.push(`<measure number="${m+1}">${attributes}${streams.join(`<backup><duration>${measureTicks}</duration></backup>`)}</measure>`);
+    measures.push(`<measure number="${number}"${implicit?' implicit="yes"':''}>${attributes}${streams.join(`<backup><duration>${measureTicks}</duration></backup>`)}</measure>`);
   }
   return { partList, body:`<part id="${partId}">${measures.join('')}</part>` };
 }
@@ -113,8 +113,12 @@ function versionToMusicXML(version) {
   if (!Number.isInteger(measureTicks) || measureTicks % 30) throw new Error('此拍号无法用第一版的六十四分音符网格记谱。');
   const parts = version.parts?.length ? version.parts : [{instrument:version.instrument,notes:version.notes}];
   const lastTick = Math.max(...parts.flatMap(part=>part.notes.map(n=>n.start+n.duration)));
-  const measureCount = Math.max(1,Math.ceil(lastTick/measureTicks));
-  const rendered=parts.map((part,index)=>renderPart(version,part,measureCount,measureTicks,`P${index+1}`));
+  const pickup=version.rhythmProcessing?.pickupTicks||0,spans=[];
+  if(pickup>0&&pickup<measureTicks&&pickup%30===0)spans.push({start:0,end:pickup,number:0,implicit:true});
+  const first=spans.length?pickup:0;
+  for(let start=first,number=1;start<Math.max(lastTick,first+1);start+=measureTicks,number++)
+    spans.push({start,end:start+measureTicks,number,implicit:false});
+  const rendered=parts.map((part,index)=>renderPart(version,part,spans,`P${index+1}`));
   const provenance=version.provenance?`<miscellaneous><miscellaneous-field name="ScoreSprout arrangement">${xml(version.provenance)}</miscellaneous-field></miscellaneous>`:'';
   return `<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE score-partwise  PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n<score-partwise version="4.0"><work><work-title>${xml(version.title)}</work-title></work><movement-title>${xml(version.title)} · ${xml({ beginner:'新手版',intermediate:'进阶版',full:'完整版' }[version.difficulty])}</movement-title><identification><creator type="software">ScoreSprout</creator>${provenance}</identification><defaults><scaling><millimeters>7</millimeters><tenths>40</tenths></scaling></defaults><part-list>${rendered.map(x=>x.partList).join('')}</part-list>${rendered.map(x=>x.body).join('')}</score-partwise>`;
 }

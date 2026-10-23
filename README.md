@@ -58,6 +58,7 @@ corepack pnpm samples
 corepack pnpm test
 corepack pnpm smoke
 node scripts/smoke-polish.js      # 检查长音衰减、多声部谱面、重新生成、错误位置与配色重启恢复
+node scripts/smoke-rhythm-case.js # 检查速度元数据偏差、弱起小节及实际窗口的播放光标；也可追加本地 MIDI 路径
 node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetSage2 端到端测试
 ```
 
@@ -89,6 +90,7 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 
 - MIDI 生成谱使用文件开头的速度和拍号；多次速度或拍号变化会提示。没有速度信息时用 120 BPM。MP3 在有足够节拍数据时估计记谱速度，原始转写 MIDI 仍保留模型的时间基准。
 - 调性推断给出的是整曲最可能的调号，不处理局部转调；短旋律、调性模糊或只有鼓的 MIDI 不会猜测调号，谱面暂用无升降号。文件自带调号与音符推断不同时，仍采用文件调号，推断结果可在调号提示中查看。已存的旧版本不会自动改写；重新生成后才使用新的推断结果。
+- 部分录制或转换得到的 MIDI 写入的 BPM 与音符实际节拍不符。足够长、节拍稳定且分析置信度高时，软件会估计记谱 BPM，并同步换算音符 tick，保持试听的真实速度；结果区同时显示文件 BPM 和记谱 BPM。必要时用不完整的首小节承接开头停顿，保持后续小节线对齐。已有正常网格、明确变速或证据不足的文件不重估。复杂自由速度仍可能需要人工整理。
 - 节奏整理会先查找稳定的拍点网格，只微调接近拍点的起音，并在这类段落中整理不超过约 100 毫秒的收尾误差、短空隙；自由节奏保留细网格。钢琴以六十四分音符为最低时间精度，其他乐器仍按难度使用细网格，但这不表示全部音符都写成短音：记谱支持附点与同一谱表内的独立声部，长音不会因为其他声部起落而反复拆分。真正的三十二、六十四分音符仍保留。复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱；踏板会延长时值，但谱面不显示踏板符号。整理仍可能造成小幅时间偏差。
 - 简化是可重复的规则处理，不保证所有曲目仍有理想的音乐表现。吉他使用高音谱表，暂不生成六线谱或指法；鼓谱支持常见鼓组映射，罕见打击乐音高可能使用通用位置。
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
@@ -154,6 +156,7 @@ corepack pnpm samples
 corepack pnpm test
 corepack pnpm smoke
 node scripts/smoke-polish.js      # Decay, polyphonic notation, regeneration, inline errors, and theme persistence.
+node scripts/smoke-rhythm-case.js # Tempo-metadata mismatch, pickup measures, and cursor timing; optionally append a local MIDI path.
 node scripts/smoke-sheetsage2.js   # After model setup, run the real SheetSage2 end-to-end test.
 ```
 
@@ -185,6 +188,7 @@ We did not find a mature drop-in project that takes only a melody and is fully a
 
 - MIDI scores use the initial tempo and time signature; later changes produce a warning. Missing tempo defaults to 120 BPM. MP3 scores estimate notation tempo when enough beats are available, while the raw transcription MIDI keeps its model time base.
 - The inferred key is a whole-piece estimate and does not follow modulations. Short, ambiguous, or percussion-only material is left without a guessed key signature. Explicit MIDI key signatures take priority; hovering over the displayed key shows a differing note-based estimate. Saved variants are not silently rewritten; regenerate a variant to use the new inferred key.
+- Some recorded or converted MIDI files declare a BPM that differs from their actual note grid. For sufficiently long, stable passages with strong evidence, ScoreSprout estimates the notation BPM and rescales ticks by the same ratio, preserving wall-clock playback speed. The result shows both tempos. A short opening measure can preserve leading silence while aligning later barlines. Existing regular grids, explicit tempo changes, and uncertain cases retain the file tempo. Complex rubato may still require manual editing.
 - Rhythm cleanup detects a stable onset grid before adjusting nearby attacks and short note-ending offsets or gaps of up to about 100 ms. Irregular passages retain fine timing. Piano uses sixty-fourth-note minimum timing precision; other instruments retain difficulty-specific grids. Dotted notes and independent voices keep held notes intact instead of slicing them at every other note's boundary. Genuine short notes remain short. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Cleanup can still cause small timing differences.
 - Simplification is deterministic and may need manual musical editing. Guitar uses a treble staff, without tablature or fingering. Drum notation maps common kit sounds; unusual percussion may use a generic position.
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
