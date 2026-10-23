@@ -1,0 +1,15 @@
+(async()=>{
+  const item=(await window.scoresprout.listLibrary())[0];
+  if(!item)throw Error('PDF 检查需要一个已保存版本');
+  const loaded=await window.scoresprout.loadVersion(item.songId,item.id);
+  $('workspace').classList.remove('hidden');$('emptyState').classList.add('hidden');
+  await renderVersion(loaded);
+  const anchors=scoreAnchors.length,notes=JSON.stringify(player.notes);
+  // Exercise the user-facing button, including the preload IPC boundary.
+  const button=$('exportPdf');button.click();
+  if(!button.disabled)throw Error('PDF 导出按钮未进入忙碌状态');
+  for(let i=0;i<650&&button.disabled;i++)await new Promise(resolve=>setTimeout(resolve,100));
+  if(button.disabled||!$('notice').textContent.startsWith('已导出：'))throw Error($('notice').textContent||'PDF 导出未完成');
+  if(notes!==JSON.stringify(player.notes)||anchors!==scoreAnchors.length)throw Error('PDF 导出改动了当前试听或光标');
+  return {title:loaded.version.title,exported:$('notice').textContent.slice('已导出：'.length),notes:loaded.version.notes.length,anchors};
+})()

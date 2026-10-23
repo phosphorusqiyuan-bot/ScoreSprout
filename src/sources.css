@@ -78,6 +78,8 @@ button:disabled { opacity: .55; cursor: wait; }
 .score-tools select { width:auto; padding:5px 8px; border:1px solid #d7e4d5; border-radius:7px; background:white; color:#34483b; }
 .score-tools input { accent-color:var(--accent, #74b85e); }
 #score { min-width:600px; }
+.result .section-title { flex-wrap:wrap; gap:12px; }
+.export-actions { flex-wrap:wrap; flex-shrink:0; }
 
 @media (max-width: 1100px) {
   .topbar { flex-wrap: wrap; gap: 18px; }

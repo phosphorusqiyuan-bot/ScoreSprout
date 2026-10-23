@@ -4,7 +4,7 @@
 
 ## 简体中文
 
-ScoreSprout 是一款优先面向 Windows 的本地乐谱桌面软件。导入 `.mid` / `.midi` 后，可选择一条或多条真实存在的轨道及难度，查看五线谱、试听生成版本，并在本机音乐库保存或导出 MusicXML / MIDI。同乐器轨道合并为一个声部；不同乐器轨道生成合奏谱。钢琴谱可使用 PM2S 分配左右手，再用 PianoPlayer 添加指法。MP3 使用 SheetSage2 提取人声旋律、器乐旋律、和弦与节拍：单旋律可按预测和弦自动编配左手，两条旋律可分别分配到左右手，也可生成吉他、贝斯、鼓练习编配。
+ScoreSprout 是一款优先面向 Windows 的本地乐谱桌面软件。导入 `.mid` / `.midi` 后，可选择一条或多条真实存在的轨道及难度，查看五线谱、试听生成版本，并在本机音乐库保存或导出 MusicXML / MIDI / PDF。同乐器轨道合并为一个声部；不同乐器轨道生成合奏谱。钢琴谱可使用 PM2S 分配左右手，再用 PianoPlayer 添加指法。MP3 使用 SheetSage2 提取人声旋律、器乐旋律、和弦与节拍：单旋律可按预测和弦自动编配左手，两条旋律可分别分配到左右手，也可生成吉他、贝斯、鼓练习编配。
 
 ## 安装与启动
 
@@ -39,6 +39,8 @@ corepack pnpm start
 
 谱面按拍子自动连梁（六八拍按三个八分音符分组），弱起小节保留正确的拍子位置。指法放在各手谱表外侧，避免重复绘制；辅助声部被其他长音覆盖的休止符会隐藏。结果区提供「谱面大小」和「显示指法」，窗口大小变化后会重新排版并定位播放光标。旧谱重新打开即可应用排版优化，无需重新转写或生成；MusicXML 导出同样包含连梁和指法位置，音符与试听节奏不变。
 
+点击结果区的「导出 PDF」，选择保存位置，即可导出 A4 竖版乐谱。PDF 使用当前的谱面大小和指法显示设置，按纸张宽度重新排版并自动分页，保持每组左右手谱表完整，包含歌曲名、难度、乐器与页码。导出使用 Electron 内置打印引擎，本地完成，无需安装 MuseScore、PDF 打印机或联网；当前试听和播放光标不会受影响。旧音乐库中的版本也可以直接导出。
+
 音乐库保存在 Electron 的 `userData/library` 目录，Windows 通常是 `%APPDATA%\scoresprout\library`。每首歌保存 `original.mid` 和 `manifest.json`；MP3 歌曲还保存 `original.mp3`。每个生成版本保存 JSON、`.musicxml`、`.mid`。已分配双手的钢琴 MIDI 导出为左右手两轨；指法保存在 MusicXML，标准 MIDI 不承载指法。无需账号或云服务。
 
 右上角 MIDI 网站下方提供「主界面配色」：森林绿、晴空蓝、薰衣紫、暖杏橙、石墨灰；选择会在本地保存，重启后恢复。生成时未指定乐器等错误会显示在「生成乐谱」按钮右侧。
@@ -61,6 +63,7 @@ corepack pnpm test
 corepack pnpm smoke
 node scripts/smoke-polish.js      # 检查长音衰减、多声部谱面、重新生成、错误位置与配色重启恢复
 node scripts/smoke-rhythm-case.js # 检查速度元数据偏差、弱起小节及实际窗口的播放光标；也可追加本地 MIDI 路径
+node scripts/smoke-pdf.js <音乐库目录> # 在隔离副本中通过界面按钮检查 PDF 导出
 node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetSage2 端到端测试
 ```
 
@@ -96,7 +99,7 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 - 节奏整理会先查找稳定的拍点网格，只微调接近拍点的起音，并在这类段落中整理不超过约 100 毫秒的收尾误差、短空隙；自由节奏保留细网格。钢琴以六十四分音符为最低时间精度，其他乐器仍按难度使用细网格，但这不表示全部音符都写成短音：记谱支持附点与同一谱表内的独立声部，长音不会因为其他声部起落而反复拆分。真正的三十二、六十四分音符仍保留。复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱；踏板会延长时值，但谱面不显示踏板符号。整理仍可能造成小幅时间偏差。
 - 简化是可重复的规则处理，不保证所有曲目仍有理想的音乐表现。吉他使用高音谱表，暂不生成六线谱或指法；鼓谱支持常见鼓组映射，罕见打击乐音高可能使用通用位置。
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
-- 暂不导出 PDF，也未制作安装包。可将 MusicXML 交给 MuseScore 等工具继续编辑或导出 PDF。
+- PDF 支持 A4 自动分页，复杂多声部仍可能需要人工排版；暂不提供纸张和页边距选项。尚未制作安装包。需要进一步编辑时，可导出 MusicXML 到 MuseScore 等工具。
 - 只处理标准 PPQ MIDI。SMPTE 时间格式暂不支持；极长或非常复杂的文件可能需要人工整理。
 - SheetSage2 的人声与器乐结果是两条候选旋律，并非分离的音轨或完整伴奏。MP3 双旋律钢琴谱把第二条旋律移入左手音域，必要时移八度；单旋律钢琴谱依据预测和弦及节拍**自动编配**左手。二者都不等于原曲钢琴左手转写。缺少可用和弦时单旋律仍只有右手。PM2S 只用于给现有钢琴音符分手，自动编配的左右手固定不再交由 PM2S 改写。模型可能错分跨手或复杂和弦，短曲和失衡结果会回退。PianoPlayer 的指法是演奏建议，密集和弦或长音连结处可能无法给每个音都标指法。
 - MP3 的吉他、贝斯、鼓谱是按预测旋律、和弦与节拍生成的练习编配，**不是原曲吉他、贝斯或鼓的转写**；缺少可用和弦时不能生成贝斯谱，缺少节拍时不能生成鼓谱。模型错认和弦或节拍会影响编配。复杂混音、强伴奏或混响仍可能导致错音和漏音，实际曲目请逐条试听。转写 MIDI 使用模型给出的音符时间，谱面仍由 ScoreSprout 量化；最多处理 25 MB、10 分钟。模型一次按最长 5 分钟窗口分析，长音频、CPU 或显存较小的显卡可能耗时很长或内存不足。旧版 MP3 导入项没有保存和弦与节拍，可重新导入原 MP3 创建新版曲目。
@@ -137,6 +140,8 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 
 Notes are beamed by beat (in groups of three eighths for 6/8), with pickup measures aligned to the end of a bar. Fingerings sit outside each hand's staff without duplicate rendering; auxiliary rests covered by another sounding note are hidden. Use **谱面大小** (Score size) and **显示指法** (Show fingerings) above the score. Resizing the window reflows the score and updates the playhead. Reopening an old score applies the engraving improvements without transcription or regeneration. MusicXML exports include the beaming and fingering placement; pitches and playback timing stay unchanged.
 
+Click **导出 PDF** (Export PDF) in the result panel and choose a destination. The A4 portrait PDF honors the current score size and fingering visibility, reflows to the printable width, and keeps each grand-staff system together. It includes the song title, difficulty, instrument, and page numbers. Export runs locally through Electron's built-in print engine without MuseScore, a PDF printer, or network access, and leaves playback and the playhead untouched. Saved library versions can be exported directly.
+
 The library lives in Electron's `userData/library` directory, usually `%APPDATA%\scoresprout\library` on Windows. Each song stores `original.mid` and `manifest.json`; MP3 imports also store `original.mp3`. Each arrangement stores JSON, `.musicxml`, and `.mid` files. No account or cloud service is required.
 
 When both hands have notes, piano MIDI exports contain separate right- and left-hand tracks. Fingering is stored in MusicXML; standard MIDI does not encode it.
@@ -161,6 +166,7 @@ corepack pnpm test
 corepack pnpm smoke
 node scripts/smoke-polish.js      # Decay, polyphonic notation, regeneration, inline errors, and theme persistence.
 node scripts/smoke-rhythm-case.js # Tempo-metadata mismatch, pickup measures, and cursor timing; optionally append a local MIDI path.
+node scripts/smoke-pdf.js <library-directory> # Exercise the PDF export button using an isolated library copy.
 node scripts/smoke-sheetsage2.js   # After model setup, run the real SheetSage2 end-to-end test.
 ```
 
@@ -196,7 +202,7 @@ We did not find a mature drop-in project that takes only a melody and is fully a
 - Rhythm cleanup detects a stable onset grid before adjusting nearby attacks and short note-ending offsets or gaps of up to about 100 ms. Irregular passages retain fine timing. Piano uses sixty-fourth-note minimum timing precision; other instruments retain difficulty-specific grids. Dotted notes and independent voices keep held notes intact instead of slicing them at every other note's boundary. Genuine short notes remain short. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Cleanup can still cause small timing differences.
 - Simplification is deterministic and may need manual musical editing. Guitar uses a treble staff, without tablature or fingering. Drum notation maps common kit sounds; unusual percussion may use a generic position.
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
-- PDF export and a packaged installer are not included. Open the MusicXML in MuseScore or another notation editor to refine it or export a PDF.
+- PDF supports automatic A4 pagination; complex polyphony may still need manual engraving. Paper size and margin controls are not included. A packaged installer is not included. Export MusicXML to MuseScore or another notation editor for further editing.
 - Only standard PPQ MIDI is supported. SMPTE timing is not supported, and very long or complex files may need manual cleanup.
 - SheetSage2's vocal and instrumental outputs are melody candidates, not separated stems or full accompaniment. With two MP3 melodies, the second is shifted into the left-hand range, sometimes by an octave. With one melody, the left hand is **automatically arranged** from predicted chords and beats. Neither output is a transcription of the recording's original left hand. Without usable chords, the single melody remains right-hand only. PM2S assigns existing MIDI piano notes to hands; it does not rewrite the hands of the generated MP3 accompaniment. Hand crossings and complex chords can be misclassified, so short or imbalanced passages may fall back. PianoPlayer's fingering is a suggestion and may omit some chord or tied notes.
 - MP3 guitar, bass, and drum scores are practice arrangements from predicted melody, chords, and beats, **not transcriptions of the recording's individual instruments**. Bass needs recognizable chords; drums need recognizable beats. Prediction errors affect these arrangements. Strong accompaniment or reverb can cause wrong or missing notes; preview both tracks. MIDI retains the model's note timing; ScoreSprout quantizes the score. MP3 input is limited to 25 MB and 10 minutes. Long files, CPU inference, or small GPUs may be very slow or run out of memory. Older MP3 library entries lack saved chord and beat data; reimport the original MP3 to create a current entry.

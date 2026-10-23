@@ -10,6 +10,7 @@ const { transcribedNotesToMidi } = require('./audio-import');
 const { enhancePianoVersion, renameMusicXML } = require('./piano');
 const { parseBeats } = require('./mp3-arrangement');
 const { layoutMusicXML } = require('./score-layout');
+const { exportScorePDF } = require('./pdf-export');
 const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
 const TRANSCRIPTION_REVISION='sheetsage2-arrangements-v1';
 
@@ -222,17 +223,25 @@ app.whenReady().then(() => {
       musicxml:layoutMusicXML(fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8')) };
   }));
   ipcMain.handle('delete-version', wrap((songId,variantId) => deleteVersion(libraryRoot,songId,variantId)));
-  ipcMain.handle('export-version', wrap(async (songId,variantId,format) => {
+  ipcMain.handle('export-version', wrap(async (songId,variantId,format,options={}) => {
     const m=readManifest(songId), v=m.variants.find(v=>v.id===variantId);
     if (!v) throw new Error('版本不存在。');
-    if (!['mid','musicxml'].includes(format)) throw new Error('不支持的导出格式。');
-    const ext=format==='mid'?'mid':'musicxml';
+    if (!['mid','musicxml','pdf'].includes(format)) throw new Error('不支持的导出格式。');
+    const ext=format;
     const defaultPath=`${m.title} - ${INSTRUMENTS[v.instrument]} - ${DIFFICULTIES[v.difficulty]}.${ext}`.replace(/[\\/:*?"<>|]/g,'_');
     const chosen=process.env.SCORESPROUT_TEST_EXPORT ? {canceled:false,filePath:path.join(process.env.SCORESPROUT_TEST_EXPORT,defaultPath)} :
-      await dialog.showSaveDialog({title:'导出文件',defaultPath,filters:[{name:format==='mid'?'MIDI':'MusicXML',extensions:[ext]}]});
+      await dialog.showSaveDialog({title:'导出文件',defaultPath,filters:[{name:{mid:'MIDI',musicxml:'MusicXML',pdf:'PDF 乐谱'}[format],extensions:[ext]}]});
     if (chosen.canceled || !chosen.filePath) return null;
     if (process.env.SCORESPROUT_TEST_EXPORT) fs.mkdirSync(process.env.SCORESPROUT_TEST_EXPORT,{recursive:true});
-    const sourceFile=path.join(songDir(songId),'variants',`${variantId}.${ext}`);
+    const sourceFile=path.join(songDir(songId),'variants',`${variantId}.${format==='pdf'?'musicxml':ext}`);
+    if(format==='pdf') {
+      const version=JSON.parse(fs.readFileSync(path.join(songDir(songId),'variants',`${variantId}.json`),'utf8'));
+      const report=await exportScorePDF(BrowserWindow,{version:{...version,title:m.title},
+        musicxml:layoutMusicXML(fs.readFileSync(sourceFile,'utf8')),showFingerings:options?.showFingerings!==false,
+        zoom:[85,100,115,130].includes(options?.zoom)?options.zoom:100},chosen.filePath);
+      if(process.env.SCORESPROUT_SMOKE_STAGE==='pdf')writeJSON(path.join(process.env.SCORESPROUT_TEST_DATA,'pdf-render.json'),report);
+      return chosen.filePath;
+    }
     if(format==='musicxml')fs.writeFileSync(chosen.filePath,layoutMusicXML(fs.readFileSync(sourceFile,'utf8')),'utf8');
     else fs.copyFileSync(sourceFile,chosen.filePath);
     return chosen.filePath;

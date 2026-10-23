@@ -16,5 +16,5 @@ contextBridge.exposeInMainWorld('scoresprout', {
   generate:(...args)=>invoke('generate-version',...args), listLibrary:()=>invoke('list-library'),
   loadVersion:(songId,variantId)=>invoke('load-version',songId,variantId),
   deleteVersion:(songId,variantId)=>invoke('delete-version',songId,variantId),
-  exportVersion:(songId,variantId,format)=>invoke('export-version',songId,variantId,format)
+  exportVersion:(songId,variantId,format,options)=>invoke('export-version',songId,variantId,format,options)
 });

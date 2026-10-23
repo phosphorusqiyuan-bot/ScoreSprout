@@ -278,28 +278,8 @@ async function renderVersion(data) {
   $('resultDetails').textContent=`${names[v.instrument]} · ${v.trackName} · ${tempoDescription} · ${v.notes.length} 个音符${pianoDescription}${v.provenance?' · '+v.provenance:''}${pianoInfo?.warning?' · '+pianoInfo.warning:''}`;
   $('playingInstrument').textContent=names[v.instrument];
   const target=$('score'); target.replaceChildren();
-  if (!window.opensheetmusicdisplay) throw new Error('乐谱渲染组件未加载。请重新安装依赖。');
   scoreDisplay=null;displayedVersion=null;
-  // OSMD 1.9.x draws fingerings both as VexFlow modifiers and as skyline
-  // labels. Use its skyline labels only, including for measures recreated
-  // during reflow. This patch is confined to the app's notation renderer.
-  opensheetmusicdisplay.VexFlowMeasure.prototype.createFingerings=()=>{};
-  const [beats,beatType]=v.timeSignature;
-  const osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay(target,{
-    autoResize:false,backend:'svg',drawTitle:false,drawComposer:false,drawPartNames:v.parts?.length>1,
-    autoBeam:true,autoBeamOptions:{beam_rests:false,maintain_stem_directions:false,
-      groups:[[beatType===8&&beats>3&&beats%3===0?3:1,beatType]]},
-    drawFingerings:$('showFingerings').checked,fingeringPosition:'aboveorbelow',fingeringInsideStafflines:false,
-    drawMeasureNumbersOnlyAtSystemStart:true,newSystemFromXML:false,newPageFromXML:false,
-    spacingFactorSoftmax:12,stretchLastSystemLine:false,percussionOneLineCutoff:0,
-    cursorsOptions:[{type:1,color:'#4eac62',alpha:.9,follow:false}]
-  });
-  Object.assign(osmd.EngravingRules,{
-    FingeringTextSize:1.25,FingeringLabelFontHeight:1.4,FingeringPaddingY:.4,
-    StaffDistance:8,BetweenStaffDistance:6,MinSkyBottomDistBetweenStaves:1.8,
-    MinimumDistanceBetweenSystems:8,MinSkyBottomDistBetweenSystems:5,
-    VoiceSpacingMultiplierVexflow:1,MeasureLeftMargin:1.2,MeasureRightMargin:1.2
-  });
+  const osmd=createScoreDisplay(target,v,{drawFingerings:$('showFingerings').checked});
   await osmd.load(data.musicxml);
   scoreDisplay=osmd;displayedVersion=v;redrawScore();
   $('result').scrollIntoView({behavior:'smooth',block:'start'}); renderLibrary();
@@ -457,11 +437,16 @@ function bind() {
   }));
   $('stopBtn').addEventListener('click',()=>{player.stop(); $('playBtn').textContent='▶';});
   $('seek').addEventListener('input',e=>player.seek(Number(e.target.value)/1000*(player.duration||0)));
-  for(const [id,format] of [['exportMidi','mid'],['exportXml','musicxml']])
+  for(const [id,format] of [['exportMidi','mid'],['exportXml','musicxml'],['exportPdf','pdf']])
     $(id).addEventListener('click',()=>guarded(async()=>{
       if(!state.entry) return;
-      const file=await window.scoresprout.exportVersion(state.entry.songId,state.entry.id,format);
-      if(file) notice(`已导出：${file}`,'success');
+      const button=$(id),label=button.textContent;button.disabled=true;
+      if(format==='pdf')button.textContent='正在导出 PDF…';
+      try {
+        const file=await window.scoresprout.exportVersion(state.entry.songId,state.entry.id,format,
+          {showFingerings:$('showFingerings').checked,zoom:Number($('scoreZoom').value)});
+        if(file) notice(`已导出：${file}`,'success');
+      } finally {button.disabled=false;button.textContent=label;}
     }));
 }
 bind(); guarded(refreshLibrary);
