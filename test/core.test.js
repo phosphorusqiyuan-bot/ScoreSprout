@@ -9,7 +9,7 @@ for(const [file,instrument] of [['piano.mid','piano'],['guitar.mid','guitar'],['
       const v=generateVersion(source,source.tracks[0].id,instrument,difficulty,source.title);counts.push(v.notes.length);
       assert(v.notes.every(n=>n.start>=0&&n.duration>0));
       const exported=versionToMidi(v),round=analyzeMidi(exported,'round.mid');
-      assert.equal(round.tracks[0].notes.length,v.notes.length);
+      assert.equal(round.tracks.reduce((total,track)=>total+track.notes.length,0),v.notes.length);
       assert.equal(round.bpm,v.bpm);
       const xml=versionToMusicXML(v);assert.match(xml,/<score-partwise version="4.0">/);assert.match(xml,/<measure number="1">/);
       assert((xml.match(/<duration>/g)||[]).length>0);
@@ -31,16 +31,18 @@ test('延音踏板保持音符时长，并与第二条钢琴轨道合并',()=>{
   for(const difficulty of ['full','intermediate','beginner']){
     const v=generateVersion(s,s.tracks.map(t=>t.id),'auto',difficulty,s.title,{});
     assert.equal(v.instrument,'piano');assert.equal(v.parts.length,1);assert.equal(v.trackIds.length,2);
-    assert(v.notes.some(n=>n.pitch===60&&n.duration>=1440));
+    if(difficulty==='full')assert(v.notes.some(n=>n.pitch===60&&n.duration>=1440));
+    else for(const [pitch,start] of [[60,0],[62,480],[64,960]])
+      assert(v.notes.some(n=>n.hand==='right'&&n.pitch===pitch&&n.start===start));
     assert(v.notes.some(n=>n.pitch===48));
-    assert(v.notes.every(n=>n.hand===undefined));
+    assert(v.notes.every(n=>difficulty==='full'?n.hand===undefined:['right','left'].includes(n.hand)));
     const xml=versionToMusicXML(v);assert.equal((xml.match(/<score-part id=/g)||[]).length,1);
     assert.match(xml,/<pitch><step>C<\/step><octave>4<\/octave><\/pitch>[\s\S]*?<staff>1<\/staff>/);
     assert.match(xml,/<pitch><step>C<\/step><octave>3<\/octave><\/pitch>[\s\S]*?<staff>2<\/staff>/);
-    assert.match(xml,/<tie type="start"\/>/);
+    if(difficulty==='full')assert.match(xml,/<tie type="start"\/>/);
     const round=analyzeMidi(versionToMidi(v),'round.mid');
-    assert.equal(round.tracks.length,1);
-    assert.equal(round.tracks[0].notes.find(n=>n.pitch===60).duration,v.notes.find(n=>n.pitch===60).duration);
+    assert.equal(round.tracks.length,difficulty==='full'?1:2);
+    assert.equal(round.tracks.flatMap(track=>track.notes).find(n=>n.pitch===60).duration,v.notes.find(n=>n.pitch===60).duration);
   }
 });
 test('不同乐器轨道生成多个声部，并保持各自音色的 MIDI 轨道',()=>{

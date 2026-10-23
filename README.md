@@ -39,6 +39,14 @@ corepack pnpm start
 
 音乐库保存在 Electron 的 `userData/library` 目录，Windows 通常是 `%APPDATA%\scoresprout\library`。每首歌保存 `original.mid` 和 `manifest.json`；MP3 歌曲还保存 `original.mp3`。每个生成版本保存 JSON、`.musicxml`、`.mid`。已分配双手的钢琴 MIDI 导出为左右手两轨；指法保存在 MusicXML，标准 MIDI 不承载指法。无需账号或云服务。
 
+钢琴难度主要调整双手负担，MIDI 与 MP3 使用同样的规则：
+
+- **新手版**：保留右手各次起音的节奏与最高音，同一时刻的和弦化为单音；左手每半小节最多选一个低音（2/4、3/4 每小节一个），相邻的重复低音尽量连成长音，并把小幅错开的起音对齐到右手或拍点。左右手各最多同时按一个键。
+- **进阶版**：同样保留右手各次旋律起音，和弦最多留两个音；左手每拍最多换一次、每次最多两个音。
+- **完整版**：保留原始音符、和弦与延音，只做记谱量化。安装模型后先对完整钢琴声部分手，再简化和标注指法；未安装时以中央 C 为界处理。右手旋律不再按整拍删减或强制移八度。
+
+简化时会收束同一只手中与下一次起音重叠的延音，减少同时按键。右手以每次起音的最高音近似主旋律，主旋律藏在内声部时仍可能选错。旧的已存乐谱保留原结果；重新生成相同难度后使用新规则。
+
 ## 示例和验证
 
 仓库的 `samples/` 包含钢琴、吉他、贝斯、鼓、四乐器合奏、无速度信息、单轨多乐器，以及分轨钢琴加延音踏板，共 8 个 MIDI。它们可以随时重新生成：
@@ -78,7 +86,7 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 
 - MIDI 生成谱使用文件开头的速度和拍号；多次速度或拍号变化会提示。没有速度信息时用 120 BPM。MP3 在有足够节拍数据时估计记谱速度，原始转写 MIDI 仍保留模型的时间基准。
 - 调性推断给出的是整曲最可能的调号，不处理局部转调；短旋律、调性模糊或只有鼓的 MIDI 不会猜测调号，谱面暂用无升降号。文件自带调号与音符推断不同时，仍采用文件调号，推断结果可在调号提示中查看。已存的旧版本不会自动改写；重新生成后才使用新的推断结果。
-- 完整版将保留的音符量化到六十四分音符，进阶版为三十二分音符，新手版为十六分音符；简化主要通过减少音符和和弦密度完成。复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱。延音踏板会延长音符时值，但谱面不显示踏板符号；量化仍可能造成小幅时间偏差。
+- 钢琴三档均以六十四分音符精度整理旋律节奏，主要简化同时按键数和左手密度；其他乐器的完整版为六十四分音符、进阶版为三十二分音符、新手版为十六分音符。复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱。延音踏板会延长音符时值，但谱面不显示踏板符号；量化仍可能造成小幅时间偏差。
 - 简化是可重复的规则处理，不保证所有曲目仍有理想的音乐表现。吉他使用高音谱表，暂不生成六线谱或指法；鼓谱支持常见鼓组映射，罕见打击乐音高可能使用通用位置。
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
 - 暂不导出 PDF，也未制作安装包。可将 MusicXML 交给 MuseScore 等工具继续编辑或导出 PDF。
@@ -124,6 +132,14 @@ The library lives in Electron's `userData/library` directory, usually `%APPDATA%
 
 When both hands have notes, piano MIDI exports contain separate right- and left-hand tracks. Fingering is stored in MusicXML; standard MIDI does not encode it.
 
+Piano difficulty focuses on hand coordination for both MIDI and MP3:
+
+- **Beginner:** keep each right-hand attack and its highest pitch, reducing chords to one key. The left hand selects at most one bass note per half measure (one per measure in 2/4 and 3/4), joins nearby repeated bass notes, and aligns small timing offsets to a nearby melody attack or beat. Each hand plays at most one key at a time.
+- **Intermediate:** keep the right-hand melody attacks with up to two simultaneous keys; the left hand changes at most once per beat and plays at most two keys.
+- **Full:** preserve notes, chords, and sustain with notation quantization. When available, PM2S receives the complete piano part before simplification and fingering. Otherwise the app uses a middle-C hand split. Simplification no longer removes successive right-hand notes by whole-beat buckets or forces melody octave changes.
+
+Simplified versions trim overlapping sustain at the next attack in the same hand. The highest note at each right-hand attack is a melody heuristic and can miss an inner-voice melody. Saved scores retain their previous results until regenerated.
+
 ### Samples and verification
 
 The `samples/` directory contains eight MIDI files: piano, guitar, bass, drums, a four-instrument ensemble, a file without tempo data, a mixed-instrument single track, and a split piano with sustain pedal. Regenerate the samples and run the checks with:
@@ -163,7 +179,7 @@ We did not find a mature drop-in project that takes only a melody and is fully a
 
 - MIDI scores use the initial tempo and time signature; later changes produce a warning. Missing tempo defaults to 120 BPM. MP3 scores estimate notation tempo when enough beats are available, while the raw transcription MIDI keeps its model time base.
 - The inferred key is a whole-piece estimate and does not follow modulations. Short, ambiguous, or percussion-only material is left without a guessed key signature. Explicit MIDI key signatures take priority; hovering over the displayed key shows a differing note-based estimate. Saved variants are not silently rewritten; regenerate a variant to use the new inferred key.
-- Full quantizes retained notes to sixty-fourth notes, Intermediate to thirty-second notes, and Beginner to sixteenth notes. Simplification reduces note and chord density without pulling retained notes to whole-beat boundaries. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Quantization can still cause small timing differences.
+- All piano difficulties use sixty-fourth-note timing precision and primarily reduce simultaneous keys and left-hand activity. Other instruments use sixty-fourth notes for Full, thirty-second notes for Intermediate, and sixteenth notes for Beginner. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Quantization can still cause small timing differences.
 - Simplification is deterministic and may need manual musical editing. Guitar uses a treble staff, without tablature or fingering. Drum notation maps common kit sounds; unusual percussion may use a generic position.
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
 - PDF export and a packaged installer are not included. Open the MusicXML in MuseScore or another notation editor to refine it or export a PDF.

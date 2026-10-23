@@ -1,6 +1,7 @@
 const { parseMidi, writeMidi } = require('midi-file');
 const { arrangeMp3 } = require('./mp3-arrangement');
 const { inferKey } = require('./key-analysis');
+const { simplifyPianoNotes } = require('./piano-difficulty');
 
 const INSTRUMENTS = { piano: '钢琴', guitar: '吉他', drums: '鼓', bass: '贝斯', ensemble: '合奏' };
 const DIFFICULTIES = { beginner: '新手版', intermediate: '进阶版', full: '完整版' };
@@ -154,18 +155,15 @@ function selectNotes(notes, instrument, difficulty, ppq) {
       chosen = sorted.length ? [sorted[0]] : [];
     } else if (instrument === 'guitar') {
       chosen = difficulty === 'beginner' ? sorted.slice(-1) : sorted.length <= 3 ? sorted : [sorted[0], ...sorted.slice(-2)];
-    } else {
-      chosen = sorted.length === 1 ? sorted : [sorted[0], sorted.at(-1)];
-      if (difficulty === 'intermediate' && sorted.length > 2) chosen.splice(1, 0, sorted[Math.floor(sorted.length / 2)]);
     }
     for (const n of chosen) {
       // The coarse bucket chooses which notes survive; it must not move their
       // onsets to the bucket boundary, which changes the melody's rhythm.
       const copy = { ...n, duration: Math.max(ppq / 4, n.duration) };
       if (instrument !== 'drums') {
-        const ranges = { piano: [48,84], guitar: [40,88], bass: [28,60] };
+        const ranges = { guitar: [40,88], bass: [28,60] };
         const [low, high] = ranges[instrument]; copy.pitch = clampPitch(copy.pitch, low, high);
-        const hand = instrument === 'piano' && (copy.hand==='left'||(!copy.hand&&copy.pitch<60)) ? 'low' : 'high';
+        const hand = 'high';
         if (last[hand] != null && difficulty === 'beginner') {
           while (copy.pitch - last[hand] > 12 && copy.pitch - 12 >= low) copy.pitch -= 12;
           while (last[hand] - copy.pitch > 12 && copy.pitch + 12 <= high) copy.pitch += 12;
@@ -178,7 +176,7 @@ function selectNotes(notes, instrument, difficulty, ppq) {
   return result;
 }
 
-function generateVersion(source, trackIds, instrument, difficulty, title, manual = false) {
+function generateVersion(source, trackIds, instrument, difficulty, title, manual = false, options = {}) {
   if ((instrument !== 'auto' && !['piano','guitar','bass','drums'].includes(instrument)) || !DIFFICULTIES[difficulty])
     throw new Error('请选择有效的乐器和难度。');
   const ids = [...new Set(Array.isArray(trackIds) ? trackIds : [trackIds])].filter(id=>id!=null);
@@ -218,20 +216,21 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
       start:n.start*ppq/source.sourcePpq*tempoScale, duration:n.duration*ppq/source.sourcePpq*tempoScale,
       velocity:n.velocity,hand:n.hand,sourceTrackId:track.id })))
       .sort((a,b) => a.start-b.start || a.pitch-b.pitch).slice(0,8000);
-    const chosen = target==='piano' && source.inputType==='mp3' ?
-      ['right','left'].flatMap(hand=>selectNotes(scaled.filter(note=>note.hand===hand),target,difficulty,ppq)) :
-      selectNotes(scaled,target,difficulty,ppq);
+    const chosen = target==='piano' ? scaled : selectNotes(scaled,target,difficulty,ppq);
+    const noteGrid=target==='piano'?30:grid;
     const unique = new Map();
     for (const n of chosen) {
-      const start = Math.max(0,Math.round(n.start/grid)*grid);
-      const end = Math.round((n.start+n.duration)/grid)*grid;
-      const note = { pitch:n.pitch,start,duration:target === 'drums' ? grid : Math.max(grid,end-start),
+      const start = Math.max(0,Math.round(n.start/noteGrid)*noteGrid);
+      const end = Math.round((n.start+n.duration)/noteGrid)*noteGrid;
+      const note = { pitch:n.pitch,start,duration:target === 'drums' ? noteGrid : Math.max(noteGrid,end-start),
         velocity:n.velocity,instrument:target,...(n.hand?{hand:n.hand}:{}) };
       const key = `${start}:${n.pitch}:${target==='piano'?(n.hand||'') : ''}`, previous = unique.get(key);
       if (!previous) unique.set(key,note);
       else { previous.duration=Math.max(previous.duration,note.duration); previous.velocity=Math.max(previous.velocity,note.velocity); }
     }
-    const notes = [...unique.values()].sort((a,b) => a.start-b.start || a.pitch-b.pitch);
+    let notes = [...unique.values()].sort((a,b) => a.start-b.start || a.pitch-b.pitch);
+    if(target==='piano' && !options.deferPianoDifficulty)
+      notes=simplifyPianoNotes(notes,difficulty,ppq,source.timeSignature);
     if (notes.length) parts.push({ instrument:target,trackIds:arrangement?arrangement.trackIds:selected.map(t=>t.id),
       trackName:selected.map(t=>t.name).join(' + '),notes });
   }
@@ -242,6 +241,8 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
     trackId:ids[0]||null,trackIds:arrangement?arrangement.trackIds:ids,
     trackName:arrangement?arrangement.trackName:tracks.map(t=>t.name).join(' + '),
     sourceTrack:tracks[0]?.sourceTrack||null,assignments,bpm:source.bpm,
+    ...(options.deferPianoDifficulty && difficulty!=='full' && parts.some(part=>part.instrument==='piano')?
+      {pianoDifficultyPending:true}:{}),
     ...(arrangement?{provenance:arrangement.provenance,
       ...(arrangement.pianoAccompaniment?{mp3PianoAccompaniment:true}:{})}:{}),
     timeSignature:source.timeSignature,keyFifths:source.keyFifths,keyMode:source.keyMode,ppq,notes,parts };

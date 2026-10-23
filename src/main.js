@@ -187,7 +187,7 @@ app.whenReady().then(() => {
     const difficulty = multiple ? choice : difficultyOrTitle;
     const title = multiple ? difficultyOrTitle : titleOrAssignments;
     const assignments = multiple ? titleOrAssignments || {} : manual;
-    const version = generateVersion(source,trackIds,instrument,difficulty,title,assignments);
+    const version = generateVersion(source,trackIds,instrument,difficulty,title,assignments,{deferPianoDifficulty:true});
     const {musicxml} = await enhancePianoVersion(version,source.inputType);
     manifest.title = version.title;
     const key = version.trackIds.length === 1 ? `${version.trackId}|${version.instrument}|${difficulty}` :
