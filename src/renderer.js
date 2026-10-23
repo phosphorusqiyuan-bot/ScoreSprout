@@ -5,6 +5,7 @@ const instruments = ['piano','guitar','bass','drums'];
 const state = { source:null, trackIds:[], assignments:{}, mp3Instrument:'piano', difficulty:'beginner', entry:null, library:[], previewingTrackId:null, pendingDelete:null, deleting:false, generating:false, regenerating:null };
 const formatTime = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 let scorePlayhead=null,scoreAnchors=[],scoreAnchorIndex=-1,scoreFrame=0,scorePpq=480,scoreBpm=120;
+let scoreDisplay=null,displayedVersion=null,scoreResizeTimer=0;
 function clearScoreCursor() {
   if(scoreFrame)cancelAnimationFrame(scoreFrame);
   scoreFrame=0;scorePlayhead?.remove();scorePlayhead=null;scoreAnchors=[];scoreAnchorIndex=-1;
@@ -162,6 +163,7 @@ function renderTracks() {
 }
 function showSource(source) {
   player.stop(); previewPlayer.stop(); state.source=source; state.entry=null; state.mp3Instrument='piano';
+  scoreDisplay=null;displayedVersion=null;
   clearScoreCursor();
   state.trackIds=source.tracks.length?[source.tracks[0].id]:[]; state.assignments={}; resetPreviewButtons();
   $('emptyState').classList.add('hidden'); $('workspace').classList.remove('hidden'); $('result').classList.add('hidden');
@@ -252,6 +254,7 @@ async function confirmDeleteScore() {
       player.load([],120,'piano'); previewPlayer.stop(); resetPreviewButtons();
       clearScoreCursor();
       state.entry=null; $('playBtn').textContent='▶';
+      scoreDisplay=null;displayedVersion=null;
       $('score').replaceChildren(); $('result').classList.add('hidden');
     }
     await refreshLibrary(); $('deleteDialog').close();
@@ -276,12 +279,42 @@ async function renderVersion(data) {
   $('playingInstrument').textContent=names[v.instrument];
   const target=$('score'); target.replaceChildren();
   if (!window.opensheetmusicdisplay) throw new Error('乐谱渲染组件未加载。请重新安装依赖。');
+  scoreDisplay=null;displayedVersion=null;
+  // OSMD 1.9.x draws fingerings both as VexFlow modifiers and as skyline
+  // labels. Use its skyline labels only, including for measures recreated
+  // during reflow. This patch is confined to the app's notation renderer.
+  opensheetmusicdisplay.VexFlowMeasure.prototype.createFingerings=()=>{};
+  const [beats,beatType]=v.timeSignature;
   const osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay(target,{
     autoResize:false,backend:'svg',drawTitle:false,drawComposer:false,drawPartNames:v.parts?.length>1,
+    autoBeam:true,autoBeamOptions:{beam_rests:false,maintain_stem_directions:false,
+      groups:[[beatType===8&&beats>3&&beats%3===0?3:1,beatType]]},
+    drawFingerings:$('showFingerings').checked,fingeringPosition:'aboveorbelow',fingeringInsideStafflines:false,
+    drawMeasureNumbersOnlyAtSystemStart:true,newSystemFromXML:false,newPageFromXML:false,
+    spacingFactorSoftmax:12,stretchLastSystemLine:false,percussionOneLineCutoff:0,
     cursorsOptions:[{type:1,color:'#4eac62',alpha:.9,follow:false}]
   });
-  await osmd.load(data.musicxml); osmd.render();attachScoreCursor(osmd,v);
+  Object.assign(osmd.EngravingRules,{
+    FingeringTextSize:1.25,FingeringLabelFontHeight:1.4,FingeringPaddingY:.4,
+    StaffDistance:8,BetweenStaffDistance:6,MinSkyBottomDistBetweenStaves:1.8,
+    MinimumDistanceBetweenSystems:8,MinSkyBottomDistBetweenSystems:5,
+    VoiceSpacingMultiplierVexflow:1,MeasureLeftMargin:1.2,MeasureRightMargin:1.2
+  });
+  await osmd.load(data.musicxml);
+  scoreDisplay=osmd;displayedVersion=v;redrawScore();
   $('result').scrollIntoView({behavior:'smooth',block:'start'}); renderLibrary();
+}
+function redrawScore() {
+  if(!scoreDisplay||!displayedVersion)return;
+  const seconds=player.playing?Math.min(player.duration,player.ctx.currentTime-player.base):player.position;
+  clearScoreCursor();
+  // setOptions only handles false in OSMD 1.9.x; set the rule both ways and
+  // clear cached labels so a hidden fingering cannot survive a reflow.
+  scoreDisplay.EngravingRules.RenderFingerings=$('showFingerings').checked;
+  for(const measures of scoreDisplay.GraphicSheet.MeasureList)
+    for(const measure of measures)for(const entry of measure.staffEntries)entry.FingeringEntries=[];
+  scoreDisplay.Zoom=Number($('scoreZoom').value)/100;
+  scoreDisplay.render();attachScoreCursor(scoreDisplay,displayedVersion);moveScoreCursor(seconds||0);
 }
 async function selectLibrarySource(item) {
   const source=await window.scoresprout.getSource(item.songId); showSource(source);
@@ -377,6 +410,15 @@ async function preview(id) {
   notice(`正在试听：${track.name}${track.detected==='unknown'&&!state.assignments[id]?'（暂用钢琴音色）':''}`,'success');
 }
 function bind() {
+  $('scoreZoom').addEventListener('change',()=>guarded(async()=>redrawScore()));
+  $('showFingerings').addEventListener('change',()=>guarded(async()=>redrawScore()));
+  let scoreWidth=0;
+  new ResizeObserver(entries=>{
+    const width=Math.round(entries[0].contentRect.width);
+    if(width===scoreWidth)return;
+    scoreWidth=width;clearTimeout(scoreResizeTimer);
+    if(scoreDisplay)scoreResizeTimer=setTimeout(()=>guarded(async()=>redrawScore()),160);
+  }).observe($('score').parentElement);
   let theme='forest';try{theme=localStorage.getItem('scoresprout-theme')||theme;}catch{}
   applyTheme(theme);
   $('themeSelect').addEventListener('change',event=>applyTheme(event.target.value,true));

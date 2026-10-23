@@ -9,6 +9,7 @@ const { transcribeWithSheetSage } = require('./sheetsage2');
 const { transcribedNotesToMidi } = require('./audio-import');
 const { enhancePianoVersion, renameMusicXML } = require('./piano');
 const { parseBeats } = require('./mp3-arrangement');
+const { layoutMusicXML } = require('./score-layout');
 const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
 const TRANSCRIPTION_REVISION='sheetsage2-arrangements-v1';
 
@@ -195,7 +196,7 @@ app.whenReady().then(() => {
     const variantId = `${version.instrument}-${difficulty}-${crypto.createHash('sha256').update(key).digest('hex').slice(0,12)}`;
     const dir = path.join(songDir(id),'variants'); fs.mkdirSync(dir,{recursive:true});
     writeJSON(path.join(dir,`${variantId}.json`),version);
-    fs.writeFileSync(path.join(dir,`${variantId}.musicxml`),musicxml,'utf8');
+    fs.writeFileSync(path.join(dir,`${variantId}.musicxml`),layoutMusicXML(musicxml),'utf8');
     fs.writeFileSync(path.join(dir,`${variantId}.mid`),versionToMidi(version));
     const entry = { id:variantId, songId:id, title:version.title, instrument:version.instrument, difficulty,
       trackId:version.trackId,trackIds:version.trackIds,assignments:version.assignments,
@@ -218,7 +219,7 @@ app.whenReady().then(() => {
     if (!/^(?:[a-f0-9]{16}|(?:piano|guitar|bass|drums|ensemble)-(?:beginner|intermediate|full)-[a-f0-9]{12})$/.test(variantId) || !m.variants.some(v=>v.id===variantId)) throw new Error('版本不存在。');
     const dir=path.join(songDir(songId),'variants');
     return { entry:m.variants.find(v=>v.id===variantId),version:JSON.parse(fs.readFileSync(path.join(dir,`${variantId}.json`),'utf8')),
-      musicxml:fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8') };
+      musicxml:layoutMusicXML(fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8')) };
   }));
   ipcMain.handle('delete-version', wrap((songId,variantId) => deleteVersion(libraryRoot,songId,variantId)));
   ipcMain.handle('export-version', wrap(async (songId,variantId,format) => {
@@ -231,13 +232,15 @@ app.whenReady().then(() => {
       await dialog.showSaveDialog({title:'导出文件',defaultPath,filters:[{name:format==='mid'?'MIDI':'MusicXML',extensions:[ext]}]});
     if (chosen.canceled || !chosen.filePath) return null;
     if (process.env.SCORESPROUT_TEST_EXPORT) fs.mkdirSync(process.env.SCORESPROUT_TEST_EXPORT,{recursive:true});
-    fs.copyFileSync(path.join(songDir(songId),'variants',`${variantId}.${ext}`),chosen.filePath);
+    const sourceFile=path.join(songDir(songId),'variants',`${variantId}.${ext}`);
+    if(format==='musicxml')fs.writeFileSync(chosen.filePath,layoutMusicXML(fs.readFileSync(sourceFile,'utf8')),'utf8');
+    else fs.copyFileSync(sourceFile,chosen.filePath);
     return chosen.filePath;
   }));
 
   const win=new BrowserWindow({width:1450,height:930,minWidth:1050,minHeight:700,show:!process.env.SCORESPROUT_SMOKE_STAGE,backgroundColor:'#f7f7f2',
     webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,
-      offscreen:process.env.SCORESPROUT_SMOKE_STAGE==='rhythm-case'} });
+      offscreen:['rhythm-case','layout'].includes(process.env.SCORESPROUT_SMOKE_STAGE)} });
   win.webContents.setWindowOpenHandler(({url}) => {
     if (midiSourceUrls.has(url)) shell.openExternal(url);
     return { action:'deny' };
@@ -260,6 +263,10 @@ app.whenReady().then(() => {
       if(stage==='rhythm-case') {
         await new Promise(resolve=>setTimeout(resolve,300));
         fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-rhythm-case.png'),(await win.webContents.capturePage()).toPNG());
+      }
+      if(stage==='layout') {
+        await new Promise(resolve=>setTimeout(resolve,300));
+        fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-layout.png'),(await win.webContents.capturePage()).toPNG());
       }
       console.log(JSON.stringify(result));app.exit(0);
     } catch(e){console.error('SMOKE FAILURE',e);app.exit(1);}

@@ -37,6 +37,8 @@ corepack pnpm start
 5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。每个版本旁的「重新生成」会沿用原始 MIDI、轨道、乐器和难度，用最新规则更新此版本；MP3 使用已保存的转写 MIDI，不重复运行转写模型。选择另一难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
 6. 点击音乐库条目旁的「删除」或结果区的「删除乐谱」，确认后移除此版本。原始 MIDI、其他版本和已导出的文件会保留；当前打开的版本被删除时，播放会停止，仍可重新生成。
 
+谱面按拍子自动连梁（六八拍按三个八分音符分组），弱起小节保留正确的拍子位置。指法放在各手谱表外侧，避免重复绘制；辅助声部被其他长音覆盖的休止符会隐藏。结果区提供「谱面大小」和「显示指法」，窗口大小变化后会重新排版并定位播放光标。旧谱重新打开即可应用排版优化，无需重新转写或生成；MusicXML 导出同样包含连梁和指法位置，音符与试听节奏不变。
+
 音乐库保存在 Electron 的 `userData/library` 目录，Windows 通常是 `%APPDATA%\scoresprout\library`。每首歌保存 `original.mid` 和 `manifest.json`；MP3 歌曲还保存 `original.mp3`。每个生成版本保存 JSON、`.musicxml`、`.mid`。已分配双手的钢琴 MIDI 导出为左右手两轨；指法保存在 MusicXML，标准 MIDI 不承载指法。无需账号或云服务。
 
 右上角 MIDI 网站下方提供「主界面配色」：森林绿、晴空蓝、薰衣紫、暖杏橙、石墨灰；选择会在本地保存，重启后恢复。生成时未指定乐器等错误会显示在「生成乐谱」按钮右侧。
@@ -132,6 +134,8 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 4. Play, pause, stop, or seek through the result. A vertical playhead moves smoothly between noteheads in time, switches at line breaks, and moves when seeking. Piano, guitar, and bass notes decay throughout a held note; seeking resumes the decayed tail without a fresh strike. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
 5. Reopen saved versions from the local library, or filter by song, instrument, and difficulty. **重新生成** beside each version uses its original MIDI, selected tracks, instrument, and difficulty to update it with the current rules. MP3 versions reuse their saved transcription MIDI without running the transcription model again. Generate another difficulty to save another version. Different instruments of the same song have separate internal IDs.
 6. Click **删除** (Delete) beside a library entry or **删除乐谱** (Delete score) in the result panel, then confirm. Only that version is removed; the original MIDI, other versions, and exported files are kept. Deleting the open version stops playback, and you can generate it again from the retained source.
+
+Notes are beamed by beat (in groups of three eighths for 6/8), with pickup measures aligned to the end of a bar. Fingerings sit outside each hand's staff without duplicate rendering; auxiliary rests covered by another sounding note are hidden. Use **谱面大小** (Score size) and **显示指法** (Show fingerings) above the score. Resizing the window reflows the score and updates the playhead. Reopening an old score applies the engraving improvements without transcription or regeneration. MusicXML exports include the beaming and fingering placement; pitches and playback timing stay unchanged.
 
 The library lives in Electron's `userData/library` directory, usually `%APPDATA%\scoresprout\library` on Windows. Each song stores `original.mid` and `manifest.json`; MP3 imports also store `original.mp3`. Each arrangement stores JSON, `.musicxml`, and `.mid` files. No account or cloud service is required.
 

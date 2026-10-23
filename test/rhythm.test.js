@@ -2,6 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {generateVersion,analyzeMidi,versionToMidi}=require('../src/midi');
 const {versionToMusicXML}=require('../src/musicxml');
+const {layoutMusicXML}=require('../src/score-layout');
 const {rhythmMismatchSource}=require('./fixtures/rhythm-mismatch');
 
 function version(notes) {
@@ -47,6 +48,7 @@ function readNotes(xml) {
 function assertScoreMatchesPlayback(v) {
   const expected=v.notes.map(({pitch,start,duration})=>({pitch,start,duration}));
   assert.deepEqual(readNotes(versionToMusicXML(v)),expected);
+  assert.deepEqual(readNotes(layoutMusicXML(versionToMusicXML(v))),expected);
   const midi=analyzeMidi(versionToMidi(v),'export.mid');
   assert.deepEqual(midi.tracks.flatMap(track=>track.notes).map(({pitch,start,duration})=>({pitch,start,duration}))
     .sort((a,b)=>a.start-b.start||a.pitch-b.pitch),expected);

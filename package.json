@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "midi-file": "^1.2.4",
-    "opensheetmusicdisplay": "^1.9.4"
+    "opensheetmusicdisplay": "1.9.9"
   },
   "devDependencies": {
     "electron": "^38.0.0"
