@@ -39,7 +39,7 @@ test('延音踏板保持音符时长，并与第二条钢琴轨道合并',()=>{
     const xml=versionToMusicXML(v);assert.equal((xml.match(/<score-part id=/g)||[]).length,1);
     assert.match(xml,/<pitch><step>C<\/step><octave>4<\/octave><\/pitch>[\s\S]*?<staff>1<\/staff>/);
     assert.match(xml,/<pitch><step>C<\/step><octave>3<\/octave><\/pitch>[\s\S]*?<staff>2<\/staff>/);
-    if(difficulty==='full')assert.match(xml,/<tie type="start"\/>/);
+    if(difficulty==='full')assert.match(xml,/<duration>1440<\/duration><voice>1<\/voice><type>half<\/type><dot\/>/);
     const round=analyzeMidi(versionToMidi(v),'round.mid');
     assert.equal(round.tracks.length,difficulty==='full'?1:2);
     assert.equal(round.tracks.flatMap(track=>track.notes).find(n=>n.pitch===60).duration,v.notes.find(n=>n.pitch===60).duration);

@@ -10,13 +10,13 @@ class ScorePlayer {
     if (this.position>0) for (const n of this.notes) {
       const begin=n.start*60/(this.bpm*480), end=(n.start+n.duration)*60/(this.bpm*480);
       if (begin<this.position && end>this.position && (n.instrument||this.instrument)!=='drums')
-        this.sound(n,ctx.currentTime,end-this.position);
+        this.sound(n,ctx.currentTime,end-this.position,this.position-begin);
     }
     this.timer=setInterval(()=>this.tick(),25); this.tick(); }
   tick() { if (!this.playing) return; const ctx=this.ctx, now=ctx.currentTime, horizon=now+1.2;
     while (this.next<this.notes.length) { const n=this.notes[this.next], when=this.base+n.start*60/(this.bpm*480); if (when>horizon) break;
       const end=when+n.duration*60/(this.bpm*480),start=Math.max(now,when);
-      if(end>now)this.sound(n,start,Math.max(.03,end-start));
+      if(end>now)this.sound(n,start,Math.max(.03,end-start),Math.max(0,start-when));
       this.next++; }
     const elapsed=now-this.base;
     this.position=Math.max(0,Math.min(this.duration,elapsed)); this.onProgress(this.position,this.duration);
@@ -27,13 +27,18 @@ class ScorePlayer {
   seek(seconds) { const was=this.playing; this.halt(); this.position=Math.min(this.duration||0,Math.max(0,seconds)); this.onProgress(this.position,this.duration||0); if (was) this.play(); }
   halt() { this.generation++; if (this.timer) clearInterval(this.timer); this.timer=null; this.playing=false;
     for (const node of this.active) { try { node.stop(); } catch {} } this.active.clear(); }
-  tone(freq,start,duration,shape,level,sustain=.5,filterFreq=0) {
+  tone(freq,start,duration,shape,level,sustain=.5,filterFreq=0,decay=2,elapsed=0) {
     const ctx=this.ctx, osc=ctx.createOscillator(), gain=ctx.createGain(); osc.type=shape; osc.frequency.setValueAtTime(freq,start);
-    const attack=Math.min(.012,duration/4), settle=Math.min(duration,Math.max(attack+.001,Math.min(.12,duration*.35)));
+    const total=duration+elapsed;
+    const attack=Math.min(.012,total/4), settle=Math.min(total,Math.max(attack+.001,Math.min(.12,total*.35)));
     const release=Math.min(.14,Math.max(.06,duration*.12));
-    gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(level,start+attack);
-    gain.gain.linearRampToValueAtTime(level*sustain,start+settle);
-    gain.gain.setValueAtTime(level*sustain,start+duration);
+    const envelope=age=>age<attack ? level*age/attack : age<settle ?
+      level*(1-(1-sustain)*(age-attack)/(settle-attack)) :
+      Math.max(.0001,level*sustain*Math.exp(-(age-settle)/decay));
+    gain.gain.setValueAtTime(envelope(elapsed),start);
+    if(elapsed<attack)gain.gain.linearRampToValueAtTime(level,start+attack-elapsed);
+    if(elapsed<settle)gain.gain.linearRampToValueAtTime(level*sustain,start+settle-elapsed);
+    if(total>settle)gain.gain.exponentialRampToValueAtTime(envelope(total),start+duration);
     gain.gain.exponentialRampToValueAtTime(.0001,start+duration+release);
     if (filterFreq) { const filter=ctx.createBiquadFilter(); filter.type='lowpass';filter.frequency.value=filterFreq;osc.connect(filter);filter.connect(gain); }
     else osc.connect(gain);
@@ -49,7 +54,7 @@ class ScorePlayer {
     else src.connect(gain);gain.connect(ctx.destination);src.onended=()=>this.active.delete(src);
     src.start(start);src.stop(start+duration+.01);this.active.add(src);
   }
-  sound(note,start,duration) {
+  sound(note,start,duration,elapsed=0) {
     const freq=440*Math.pow(2,(note.pitch-69)/12), velocity=(note.velocity||80)/127;
     const instrument=note.instrument||this.instrument;
     if (instrument==='drums') {
@@ -57,9 +62,17 @@ class ScorePlayer {
       else if ([38,40,37].includes(note.pitch)) { this.noise(start,.17,.3*velocity,950);this.tone(180,start,.08,'triangle',.12*velocity,.08); }
       else if ([42,44,46].includes(note.pitch)) this.noise(start,note.pitch===46?.32:.09,.16*velocity,5500);
       else this.noise(start,.32,.2*velocity,2500);
-    } else if (instrument==='piano') { this.tone(freq,start,duration,'triangle',.27*velocity,.45); this.tone(freq*2,start,duration,'sine',.075*velocity,.25); }
-    else if (instrument==='guitar') { this.tone(freq,start,duration,'triangle',.32*velocity,.32,2800); this.tone(freq*2,start,duration,'sine',.055*velocity,.16); }
-    else { this.tone(freq,start,duration,'sine',.44*velocity,.65); this.tone(freq*2,start,duration,'triangle',.08*velocity,.4,800); }
+    } else if (instrument==='piano') {
+      const decay=Math.max(1.2,Math.min(3,2.1*Math.pow(440/freq,.18)));
+      this.tone(freq,start,duration,'triangle',.27*velocity,.45,0,decay,elapsed);
+      this.tone(freq*2,start,duration,'sine',.075*velocity,.25,0,.65,elapsed);
+    } else if (instrument==='guitar') {
+      this.tone(freq,start,duration,'triangle',.32*velocity,.32,2800,1.25,elapsed);
+      this.tone(freq*2,start,duration,'sine',.055*velocity,.16,0,.45,elapsed);
+    } else {
+      this.tone(freq,start,duration,'sine',.44*velocity,.65,0,2.4,elapsed);
+      this.tone(freq*2,start,duration,'triangle',.08*velocity,.4,800,.9,elapsed);
+    }
   }
 }
 window.ScorePlayer=ScorePlayer;

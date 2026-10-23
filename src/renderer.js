@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const names = { piano:'钢琴', guitar:'吉他', drums:'鼓', bass:'贝斯', ensemble:'合奏' };
 const levels = { beginner:'新手版', intermediate:'进阶版', full:'完整版' };
 const instruments = ['piano','guitar','bass','drums'];
-const state = { source:null, trackIds:[], assignments:{}, mp3Instrument:'piano', difficulty:'beginner', entry:null, library:[], previewingTrackId:null, pendingDelete:null, deleting:false };
+const state = { source:null, trackIds:[], assignments:{}, mp3Instrument:'piano', difficulty:'beginner', entry:null, library:[], previewingTrackId:null, pendingDelete:null, deleting:false, generating:false, regenerating:null };
 const formatTime = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 let scorePlayhead=null,scoreAnchors=[],scoreAnchorIndex=-1,scoreFrame=0,scorePpq=480,scoreBpm=120;
 function clearScoreCursor() {
@@ -84,6 +84,16 @@ function notice(message,type='') {
   if (!message) el.classList.add('hidden');
 }
 async function guarded(fn) { try { await fn(); } catch(e) { notice(e.message||String(e),'error'); } }
+function generationMessage(message='') {
+  $('generateMessage').textContent=message;
+  $('generateMessage').classList.toggle('hidden',!message);
+}
+function applyTheme(theme,save=false) {
+  const selected=['forest','sky','lavender','apricot','graphite'].includes(theme)?theme:'forest';
+  document.documentElement.dataset.theme=selected;
+  $('themeSelect').value=selected;
+  if(save)try{localStorage.setItem('scoresprout-theme',selected);}catch{}
+}
 function resetPreviewButtons() {
   state.previewingTrackId=null;
   document.querySelectorAll('.track-preview').forEach(button => {
@@ -95,6 +105,7 @@ function selectedInstrument(track) { return state.source?.inputType==='mp3' ? 'p
   track.detected==='unknown' ? state.assignments[track.id] : track.detected; }
 function renderSelection() {
   if (!state.source) return;
+  generationMessage();
   for (const row of document.querySelectorAll('.track-item')) {
     const selected=state.trackIds.includes(row.dataset.id);
     row.classList.toggle('selected',selected);
@@ -198,6 +209,7 @@ function renderLibrary() {
     box.append(p); return;
   }
   for (const item of items) {
+    const busy=state.generating||!!state.regenerating;
     const row=document.createElement('div'); row.className='library-row';
     const button=document.createElement('button');
     button.className=`library-item ${state.entry?.id===item.id&&state.entry?.songId===item.songId?'active':''}`;
@@ -205,12 +217,21 @@ function renderLibrary() {
     title.textContent=`${item.title} · ${levels[item.difficulty]}`;
     meta.textContent=`${names[item.instrument]||item.instrument} · ${item.trackName}`;
     button.append(title,meta);
+    button.disabled=busy;
     button.addEventListener('click',()=>guarded(()=>openLibrary(item)));
     const remove=document.createElement('button'); remove.type='button'; remove.className='library-delete';
     remove.textContent='删除'; remove.dataset.id=item.id;
     remove.setAttribute('aria-label',`删除 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
     remove.addEventListener('click',()=>requestDelete(item));
-    row.append(button,remove); box.append(row);
+    remove.disabled=busy;
+    const regenerate=document.createElement('button');regenerate.type='button';regenerate.className='library-regenerate';
+    regenerate.textContent=state.regenerating===item.id?'生成中…':'重新生成';regenerate.dataset.id=item.id;
+    regenerate.title='使用原始 MIDI 和此版本的轨道、乐器、难度重新生成';
+    regenerate.setAttribute('aria-label',`重新生成 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
+    regenerate.disabled=busy;
+    regenerate.addEventListener('click',()=>guarded(()=>regenerateLibrary(item)));
+    const actions=document.createElement('div');actions.className='library-actions';actions.append(regenerate,remove);
+    row.append(button,actions); box.append(row);
   }
 }
 function requestDelete(item) {
@@ -261,7 +282,7 @@ async function renderVersion(data) {
   await osmd.load(data.musicxml); osmd.render();attachScoreCursor(osmd,v);
   $('result').scrollIntoView({behavior:'smooth',block:'start'}); renderLibrary();
 }
-async function openLibrary(item) {
+async function selectLibrarySource(item) {
   const source=await window.scoresprout.getSource(item.songId); showSource(source);
   state.trackIds=(item.trackIds||[item.trackId]).filter(id=>source.tracks.some(t=>t.id===id));
   state.assignments=source.inputType==='mp3'?{}:{...(item.assignments||{})};
@@ -273,7 +294,19 @@ async function openLibrary(item) {
     state.assignments[item.trackId]=item.instrument;
   renderTracks(); state.difficulty=item.difficulty;
   document.querySelectorAll('.difficulty-option').forEach(b=>b.classList.toggle('active',b.dataset.difficulty===state.difficulty));
+}
+async function openLibrary(item) {
+  if(state.generating||state.regenerating)return;
+  await selectLibrarySource(item);
   const loaded=await window.scoresprout.loadVersion(item.songId,item.id); await renderVersion(loaded);
+}
+async function regenerateLibrary(item) {
+  if(state.generating||state.regenerating)return;
+  state.regenerating=item.id;renderLibrary();$('generateBtn').disabled=true;
+  try {
+    await selectLibrarySource(item);
+    await generate();
+  } finally {state.regenerating=null;renderLibrary();$('generateBtn').disabled=false;}
 }
 async function importMidi() {
   const source=await window.scoresprout.importMidi();
@@ -303,16 +336,17 @@ async function importMp3() {
   } finally {buttons.forEach(button=>button.disabled=false);}
 }
 async function generate() {
-  if (!state.source) return;
-  if (!state.trackIds.length && !(state.source.inputType==='mp3'&&['bass','drums'].includes(state.mp3Instrument)))
-    throw new Error('请先选择至少一条有音符的旋律或轨道。');
-  const title=$('songTitle').value.trim(); if (!title) throw new Error('请填写歌曲名。');
-  for (const track of state.source.tracks.filter(t=>state.trackIds.includes(t.id)))
-    if(state.source.inputType!=='mp3')
-    if (track.detected==='unknown'&&!instruments.includes(state.assignments[track.id]))
-      throw new Error(`轨道「${track.name}」乐器未识别；请先试听并指定乐器。`);
-  $('generateBtn').disabled=true; $('generateBtn').textContent='正在生成…';
+  if (!state.source || state.generating) return;
+  generationMessage();
   try {
+    if (!state.trackIds.length && !(state.source.inputType==='mp3'&&['bass','drums'].includes(state.mp3Instrument)))
+      throw new Error('请先选择至少一条有音符的旋律或轨道。');
+    const title=$('songTitle').value.trim(); if (!title) throw new Error('请填写歌曲名。');
+    for (const track of state.source.tracks.filter(t=>state.trackIds.includes(t.id)))
+      if (state.source.inputType!=='mp3'&&track.detected==='unknown'&&!instruments.includes(state.assignments[track.id]))
+        throw new Error(`轨道「${track.name}」乐器未识别；请先试听并指定乐器。`);
+    state.generating=true;renderLibrary();
+    $('generateBtn').disabled=true; $('generateBtn').textContent='正在生成…';
     const data=await window.scoresprout.generate(state.source.id,state.trackIds,state.difficulty,title,state.assignments,
       state.source.inputType==='mp3'?state.mp3Instrument:null);
     await window.scoresprout.renameSong(state.source.id,title);
@@ -320,7 +354,10 @@ async function generate() {
     await refreshLibrary(); await renderVersion(data);
     notice(data.version.pianoProcessing?.warning || '乐谱已保存到本地音乐库。',
       data.version.pianoProcessing?.warning ? '' : 'success');
+  } catch(error) {
+    generationMessage(error.message||String(error));
   } finally {
+    state.generating=false;renderLibrary();
     $('generateBtn').disabled=false; $('generateBtn').innerHTML='生成乐谱 <span>→</span>';
   }
 }
@@ -339,6 +376,9 @@ async function preview(id) {
   notice(`正在试听：${track.name}${track.detected==='unknown'&&!state.assignments[id]?'（暂用钢琴音色）':''}`,'success');
 }
 function bind() {
+  let theme='forest';try{theme=localStorage.getItem('scoresprout-theme')||theme;}catch{}
+  applyTheme(theme);
+  $('themeSelect').addEventListener('change',event=>applyTheme(event.target.value,true));
   $('importBtn').addEventListener('click',()=>guarded(importMidi));
   $('emptyImportBtn').addEventListener('click',()=>guarded(importMidi));
   $('importMp3Btn').addEventListener('click',()=>guarded(importMp3));

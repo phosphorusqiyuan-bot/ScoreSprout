@@ -1,0 +1,46 @@
+(async()=>{
+  const check=(condition,message)=>{if(!condition)throw Error(message);};
+  const source=await window.scoresprout.importMidi();showSource(source);
+  check(source.tracks[0].detected==='unknown','测试轨道应需要指定乐器');
+  await generate();
+  check(!$('generateMessage').classList.contains('hidden')&&$('generateMessage').textContent.includes('乐器未识别'),'生成按钮旁没有乐器错误提示');
+  check($('generateMessage').getBoundingClientRect().left>$('generateBtn').getBoundingClientRect().right,'错误提示没有放在按钮右侧');
+  check(!$('notice').textContent.includes('乐器未识别'),'错误仍显示在顶部');
+  const assign=document.querySelector('.track-assign');assign.value='guitar';assign.dispatchEvent(new Event('change'));
+  check($('generateMessage').classList.contains('hidden'),'指定乐器后错误没有清除');
+  document.querySelector('[data-difficulty="full"]').click();
+  await generate();
+  check(state.entry&&$('score').querySelector('svg'),'乐谱未生成或渲染失败');
+  const before=await window.scoresprout.loadVersion(state.entry.songId,state.entry.id);
+  check(!/<type>(?:32nd|64th)<\/type>/.test(before.musicxml),'规则节拍仍有细碎音符');
+  check(before.musicxml.includes('<dot/>')&&before.musicxml.includes('<type>whole</type>'),'长音或附点记谱缺失');
+  check(scoreAnchors.length===new Set(before.version.notes.map(note=>note.start)).size,'多声部谱面光标没有定位所有起音');
+  const item=state.entry;
+  const regenerate=document.querySelector('.library-regenerate');
+  check(regenerate&&regenerate.dataset.id===item.id,'音乐库缺少重新生成按钮');
+  regenerate.click();
+  for(let i=0;i<200&&state.regenerating;i++)await new Promise(resolve=>setTimeout(resolve,50));
+  check(!state.regenerating&&!state.generating,'重新生成未结束');
+  check(state.entry.id===item.id&&state.entry.generatedAt>item.generatedAt,'重新生成未更新当前版本');
+  check(state.assignments[source.tracks[0].id]==='guitar'&&state.difficulty==='full','重新生成未沿用原设置');
+  const colors=[];
+  for(const theme of ['forest','sky','lavender','apricot','graphite']) {
+    $('themeSelect').value=theme;$('themeSelect').dispatchEvent(new Event('change'));
+    check(document.documentElement.dataset.theme===theme,'配色选择未应用');
+    colors.push(getComputedStyle(document.documentElement).backgroundColor);
+  }
+  check(new Set(colors).size===5,'五种配色没有不同的背景');
+  applyTheme('lavender',true);
+  const sampleRate=22050,ctx=new OfflineAudioContext(1,sampleRate*5,sampleRate);
+  const audio=new ScorePlayer(()=>{},()=>{});audio.ctx=ctx;audio.instrument='piano';
+  audio.sound({pitch:69,velocity:100},0,4);
+  const buffer=await ctx.startRendering(),samples=buffer.getChannelData(0);
+  const rms=(start,end)=>{
+    const segment=samples.slice(Math.floor(start*sampleRate),Math.floor(end*sampleRate));
+    return Math.sqrt(segment.reduce((sum,value)=>sum+value*value,0)/segment.length);
+  };
+  const early=rms(.2,.4),late=rms(3.2,3.4);
+  check(late>early*.05&&late<early*.4,'实际合成声音未自然衰减或衰减过快');
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  return {generated:true,regenerated:true,inlineError:true,voices:true,colors,decayRatio:late/early,library:state.library.length};
+})()

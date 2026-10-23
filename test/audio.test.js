@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 
-test('长音在整个记谱时值内保持可听电平',()=>{
+test('长音自然衰减，记谱结束前保持可听尾音',()=>{
   const window={};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..','src','audio.js'),'utf8'),{window});
   const events=[],stops=[];
@@ -25,9 +25,28 @@ test('长音在整个记谱时值内保持可听电平',()=>{
   const player=new window.ScorePlayer(()=>{},()=>{});
   player.ctx=ctx;
   player.tone(440,2,3,'sine',.5,.6);
-  assert(events.some(e=>e.kind==='set'&&e.time===5&&e.value>=.25));
+  const settled=events.find(e=>e.kind==='linear'&&e.value===.3);
+  const tail=events.find(e=>e.kind==='exponential'&&e.time===5);
+  assert(tail.value>0.01 && tail.value<settled.value*.3);
   assert(events.some(e=>e.kind==='exponential'&&e.time>5));
   assert(stops[0]>5);
+});
+
+test('跳转到长音中间时沿用已衰减的音量，不重新敲击',()=>{
+  const window={};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..','src','audio.js'),'utf8'),{window});
+  const gains=[];
+  const player=new window.ScorePlayer(()=>{},()=>{});
+  player.instrument='piano';
+  player.ctx={destination:{},createOscillator:()=>({frequency:{setValueAtTime(){}},connect(){},start(){},stop(){}}),
+    createGain:()=>{const events=[];gains.push(events);return {connect(){},gain:{
+      setValueAtTime(value,time){events.push({kind:'set',value,time});},
+      linearRampToValueAtTime(value,time){events.push({kind:'linear',value,time});},
+      exponentialRampToValueAtTime(value,time){events.push({kind:'exponential',value,time});}
+    }};}};
+  player.sound({pitch:69,velocity:127},0,2,3);
+  assert(gains[0][0].value>0 && gains[0][0].value<.27*.45*.3);
+  assert(gains.every(events=>!events.some(event=>event.kind==='linear')));
 });
 test('播放到曲末后自动停止并通知界面',()=>{
   const window={};

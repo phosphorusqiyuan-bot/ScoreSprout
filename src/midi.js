@@ -2,6 +2,7 @@ const { parseMidi, writeMidi } = require('midi-file');
 const { arrangeMp3 } = require('./mp3-arrangement');
 const { inferKey } = require('./key-analysis');
 const { simplifyPianoNotes } = require('./piano-difficulty');
+const { tidyRhythm } = require('./rhythm');
 
 const INSTRUMENTS = { piano: '钢琴', guitar: '吉他', drums: '鼓', bass: '贝斯', ensemble: '合奏' };
 const DIFFICULTIES = { beginner: '新手版', intermediate: '进阶版', full: '完整版' };
@@ -216,7 +217,8 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
       start:n.start*ppq/source.sourcePpq*tempoScale, duration:n.duration*ppq/source.sourcePpq*tempoScale,
       velocity:n.velocity,hand:n.hand,sourceTrackId:track.id })))
       .sort((a,b) => a.start-b.start || a.pitch-b.pitch).slice(0,8000);
-    const chosen = target==='piano' ? scaled : selectNotes(scaled,target,difficulty,ppq);
+    let chosen = target==='piano' ? scaled : selectNotes(scaled,target,difficulty,ppq);
+    if(target!=='drums')chosen=tidyRhythm(chosen,{ppq,bpm:source.bpm,inputType:source.inputType,difficulty});
     const noteGrid=target==='piano'?30:grid;
     const unique = new Map();
     for (const n of chosen) {

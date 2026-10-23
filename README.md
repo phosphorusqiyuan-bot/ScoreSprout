@@ -33,11 +33,13 @@ corepack pnpm start
 1. 点击「导入 MIDI 文件」，或先完成模型安装后点击「MP3 提取旋律（SheetSage2）」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。
 2. 查看速度、拍号、调号和轨道列表，修改歌曲名。已有 MIDI 调号优先使用文件值；没有调号时会从非打击乐音符的音高和时长推断，界面标明「音符推断」。MIDI 可勾选多条有音符的轨道、试听并手动指定未识别的乐器。MP3 会显示有音符的人声、器乐旋律轨道；分别试听后可勾选一条或两条，并在「生成乐器」中选择钢琴、吉他、贝斯或鼓。轨道预览统一使用钢琴音色。
 3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。选择的 MIDI 钢琴轨道会先合并成一组音符，再由 PM2S 预测左右手，PianoPlayer 给 MusicXML 标注指法；太短的曲目使用音高回退。MP3 只选一条旋律时，右手保留该旋律，左手按预测和弦及节拍编配：新手版以单根音为主，进阶版加入双音，完整版加入三和弦。选两条旋律时仍分别放入左右手。若缺少覆盖旋律的可用和弦，会明确提示并只生成右手。吉他使用所选旋律与预测和弦，贝斯使用预测和弦根音，鼓使用预测节拍。结果区会标明这些是练习编配，不是原曲真实分轨。MIDI 已识别的乐器轨道不能冒充另一种乐器。
-4. 在结果区域播放、暂停、停止或拖动进度。播放时谱面上的竖线按播放时间在音符之间平滑移动，并对齐符头；换行时切换到下一行，拖动进度后也会跳到对应位置。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
-5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。再次选择难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
+4. 在结果区域播放、暂停、停止或拖动进度。播放时谱面上的竖线按播放时间在音符之间平滑移动，并对齐符头；换行时切换到下一行，拖动进度后也会跳到对应位置。钢琴、吉他和贝斯长音会持续衰减，拖动到长音中途时沿用已衰减的音量。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
+5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。每个版本旁的「重新生成」会沿用原始 MIDI、轨道、乐器和难度，用最新规则更新此版本；MP3 使用已保存的转写 MIDI，不重复运行转写模型。选择另一难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
 6. 点击音乐库条目旁的「删除」或结果区的「删除乐谱」，确认后移除此版本。原始 MIDI、其他版本和已导出的文件会保留；当前打开的版本被删除时，播放会停止，仍可重新生成。
 
 音乐库保存在 Electron 的 `userData/library` 目录，Windows 通常是 `%APPDATA%\scoresprout\library`。每首歌保存 `original.mid` 和 `manifest.json`；MP3 歌曲还保存 `original.mp3`。每个生成版本保存 JSON、`.musicxml`、`.mid`。已分配双手的钢琴 MIDI 导出为左右手两轨；指法保存在 MusicXML，标准 MIDI 不承载指法。无需账号或云服务。
+
+右上角 MIDI 网站下方提供「主界面配色」：森林绿、晴空蓝、薰衣紫、暖杏橙、石墨灰；选择会在本地保存，重启后恢复。生成时未指定乐器等错误会显示在「生成乐谱」按钮右侧。
 
 钢琴难度主要调整双手负担，MIDI 与 MP3 使用同样的规则：
 
@@ -55,6 +57,7 @@ corepack pnpm start
 corepack pnpm samples
 corepack pnpm test
 corepack pnpm smoke
+node scripts/smoke-polish.js      # 检查长音衰减、多声部谱面、重新生成、错误位置与配色重启恢复
 node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetSage2 端到端测试
 ```
 
@@ -86,7 +89,7 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 
 - MIDI 生成谱使用文件开头的速度和拍号；多次速度或拍号变化会提示。没有速度信息时用 120 BPM。MP3 在有足够节拍数据时估计记谱速度，原始转写 MIDI 仍保留模型的时间基准。
 - 调性推断给出的是整曲最可能的调号，不处理局部转调；短旋律、调性模糊或只有鼓的 MIDI 不会猜测调号，谱面暂用无升降号。文件自带调号与音符推断不同时，仍采用文件调号，推断结果可在调号提示中查看。已存的旧版本不会自动改写；重新生成后才使用新的推断结果。
-- 钢琴三档均以六十四分音符精度整理旋律节奏，主要简化同时按键数和左手密度；其他乐器的完整版为六十四分音符、进阶版为三十二分音符、新手版为十六分音符。复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱。延音踏板会延长音符时值，但谱面不显示踏板符号；量化仍可能造成小幅时间偏差。
+- 节奏整理会先查找稳定的拍点网格，只微调接近拍点的起音，并在这类段落中整理不超过约 100 毫秒的收尾误差、短空隙；自由节奏保留细网格。钢琴以六十四分音符为最低时间精度，其他乐器仍按难度使用细网格，但这不表示全部音符都写成短音：记谱支持附点与同一谱表内的独立声部，长音不会因为其他声部起落而反复拆分。真正的三十二、六十四分音符仍保留。复杂连音、摇摆节奏、踏板标记、表情与力度细节尚不能完整记谱；踏板会延长时值，但谱面不显示踏板符号。整理仍可能造成小幅时间偏差。
 - 简化是可重复的规则处理，不保证所有曲目仍有理想的音乐表现。吉他使用高音谱表，暂不生成六线谱或指法；鼓谱支持常见鼓组映射，罕见打击乐音高可能使用通用位置。
 - 试听采用轻量合成音色，并非高采样率 SoundFont；音符与谱一致，但与专业音源的质感不同。
 - 暂不导出 PDF，也未制作安装包。可将 MusicXML 交给 MuseScore 等工具继续编辑或导出 PDF。
@@ -124,13 +127,15 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 1. Click **导入 MIDI 文件** (Import MIDI file) or **MP3 提取旋律（SheetSage2）** after model setup. The app copies the file to its local library without changing the original. For an MP3, **导出转写 MIDI** exports the raw transcription immediately.
 2. Review the tempo, time signature, key signature, and tracks. Edit the song title if needed. An explicit MIDI key signature takes priority; when it is absent, the app estimates a key from the pitch and duration of non-percussion notes and labels it as inferred. MIDI tracks can be previewed, selected together, and assigned an instrument when unidentified. MP3 results show vocal and instrumental melody tracks when notes are present. Preview and select one or both, then choose an output instrument. Track previews use piano sound.
 3. Choose **新手版** (Beginner), **进阶版** (Intermediate), or **完整版** (Full), then click **生成乐谱** (Generate score). Selected MIDI piano notes are combined before PM2S assigns hands; PianoPlayer annotates the resulting MusicXML. Very short passages fall back to a pitch split. For a single MP3 melody, the right hand keeps the melody and the left hand is arranged from predicted chords and beats; Beginner favors single bass notes, Intermediate adds dyads, and Full adds triads. With two selected melodies, each takes one hand. If no usable chords cover the melody, the app explains why it keeps only the right hand. Guitar combines a selected melody with predicted chords; bass uses chord roots; drums use predicted beats. These are practice arrangements, not transcriptions of the source instruments. A recognized MIDI instrument track cannot be relabeled as another instrument.
-4. Play, pause, stop, or seek through the result. A vertical playhead moves smoothly between noteheads in time, switches at line breaks, and moves when seeking. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
-5. Reopen saved versions from the local library, or filter by song, instrument, and difficulty. Generate another difficulty to save another version. Different instruments of the same song have separate internal IDs.
+4. Play, pause, stop, or seek through the result. A vertical playhead moves smoothly between noteheads in time, switches at line breaks, and moves when seeking. Piano, guitar, and bass notes decay throughout a held note; seeking resumes the decayed tail without a fresh strike. Sustain pedal events extend notes until pedal release or a repeated note. The score, playback, and exported MIDI are derived from the same generated note data.
+5. Reopen saved versions from the local library, or filter by song, instrument, and difficulty. **重新生成** beside each version uses its original MIDI, selected tracks, instrument, and difficulty to update it with the current rules. MP3 versions reuse their saved transcription MIDI without running the transcription model again. Generate another difficulty to save another version. Different instruments of the same song have separate internal IDs.
 6. Click **删除** (Delete) beside a library entry or **删除乐谱** (Delete score) in the result panel, then confirm. Only that version is removed; the original MIDI, other versions, and exported files are kept. Deleting the open version stops playback, and you can generate it again from the retained source.
 
 The library lives in Electron's `userData/library` directory, usually `%APPDATA%\scoresprout\library` on Windows. Each song stores `original.mid` and `manifest.json`; MP3 imports also store `original.mp3`. Each arrangement stores JSON, `.musicxml`, and `.mid` files. No account or cloud service is required.
 
 When both hands have notes, piano MIDI exports contain separate right- and left-hand tracks. Fingering is stored in MusicXML; standard MIDI does not encode it.
+
+The theme selector below the MIDI links offers Forest, Sky, Lavender, Apricot, and Graphite palettes, saved locally across restarts. Generation errors, including an unassigned instrument, appear beside the Generate button.
 
 Piano difficulty focuses on hand coordination for both MIDI and MP3:
 
@@ -148,6 +153,7 @@ The `samples/` directory contains eight MIDI files: piano, guitar, bass, drums, 
 corepack pnpm samples
 corepack pnpm test
 corepack pnpm smoke
+node scripts/smoke-polish.js      # Decay, polyphonic notation, regeneration, inline errors, and theme persistence.
 node scripts/smoke-sheetsage2.js   # After model setup, run the real SheetSage2 end-to-end test.
 ```
 
@@ -179,7 +185,7 @@ We did not find a mature drop-in project that takes only a melody and is fully a
 
 - MIDI scores use the initial tempo and time signature; later changes produce a warning. Missing tempo defaults to 120 BPM. MP3 scores estimate notation tempo when enough beats are available, while the raw transcription MIDI keeps its model time base.
 - The inferred key is a whole-piece estimate and does not follow modulations. Short, ambiguous, or percussion-only material is left without a guessed key signature. Explicit MIDI key signatures take priority; hovering over the displayed key shows a differing note-based estimate. Saved variants are not silently rewritten; regenerate a variant to use the new inferred key.
-- All piano difficulties use sixty-fourth-note timing precision and primarily reduce simultaneous keys and left-hand activity. Other instruments use sixty-fourth notes for Full, thirty-second notes for Intermediate, and sixteenth notes for Beginner. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Quantization can still cause small timing differences.
+- Rhythm cleanup detects a stable onset grid before adjusting nearby attacks and short note-ending offsets or gaps of up to about 100 ms. Irregular passages retain fine timing. Piano uses sixty-fourth-note minimum timing precision; other instruments retain difficulty-specific grids. Dotted notes and independent voices keep held notes intact instead of slicing them at every other note's boundary. Genuine short notes remain short. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Cleanup can still cause small timing differences.
 - Simplification is deterministic and may need manual musical editing. Guitar uses a treble staff, without tablature or fingering. Drum notation maps common kit sounds; unusual percussion may use a generic position.
 - Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
 - PDF export and a packaged installer are not included. Open the MusicXML in MuseScore or another notation editor to refine it or export a PDF.

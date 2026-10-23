@@ -1,0 +1,9 @@
+(async()=>{
+  if(document.documentElement.dataset.theme!=='lavender'||$('themeSelect').value!=='lavender')
+    throw Error('重启后没有恢复配色');
+  await refreshLibrary();
+  if(state.library.length!==1||!document.querySelector('.library-regenerate'))throw Error('重启后音乐库或重新生成按钮丢失');
+  await openLibrary(state.library[0]);
+  if(!$('score').querySelector('svg')||!scoreAnchors.length)throw Error('重启后的乐谱或光标未恢复');
+  return {persisted:true,theme:document.documentElement.dataset.theme,library:state.library.length};
+})()

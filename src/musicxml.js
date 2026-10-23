@@ -8,31 +8,62 @@ function pitchXML(pitch, flats) {
   const [step, alter] = (flats ? flatNames : sharpNames)[pitch % 12];
   return `<pitch><step>${step}</step>${alter ? `<alter>${alter}</alter>` : ''}<octave>${Math.floor(pitch / 12) - 1}</octave></pitch>`;
 }
-function durationPieces(ticks) {
-  const values = [[1920,'whole'],[960,'half'],[480,'quarter'],[240,'eighth'],[120,'16th'],[60,'32nd'],[30,'64th']];
+function durationPieces(ticks, start=0, measureStart=0, beatTicks=480) {
+  const values = [[2880,'whole',true],[1920,'whole'],[1440,'half',true],[960,'half'],
+    [720,'quarter',true],[480,'quarter'],[360,'eighth',true],[240,'eighth'],
+    [180,'16th',true],[120,'16th'],[90,'32nd',true],[60,'32nd'],[30,'64th']];
   const out = [];
-  let remain = ticks;
-  for (const [value,type] of values) while (remain >= value) { out.push({ duration:value, type }); remain -= value; }
-  if (remain) throw new Error('无法记谱的节奏长度。');
+  let remain = ticks,position=start;
+  while(remain>0) {
+    const offset=(position-measureStart)%beatTicks;
+    const limit=offset ? Math.min(remain,beatTicks-offset) : remain;
+    const selected=values.find(([value])=>value<=limit);
+    if(!selected)throw new Error('无法记谱的节奏长度。');
+    const [duration,type,dot]=selected;
+    out.push({start:position,duration,type,dot:!!dot});
+    remain-=duration;position+=duration;
+  }
   return out;
 }
-function voicePieces(notes, measureStart, measureEnd) {
-  const boundaries = new Set([measureStart, measureEnd]);
-  notes.forEach(n => { const end = n.start + n.duration;
-    if (n.start > measureStart && n.start < measureEnd) boundaries.add(n.start);
-    if (end > measureStart && end < measureEnd) boundaries.add(end);
-  });
-  const sorted = [...boundaries].sort((a,b) => a-b), pieces = [];
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const start = sorted[i], end = sorted[i+1];
-    const active = notes.filter(n => n.start <= start && n.start + n.duration >= end);
-    for (const d of durationPieces(end-start)) pieces.push({ start: start + pieces.filter(p => p.start >= start).reduce((s,p) => s+p.duration,0), ...d, active });
+function allocateVoices(notes, preferLow=false) {
+  const groups=new Map();
+  for(const note of notes) {
+    const key=`${note.start}:${note.duration}`;
+    if(!groups.has(key))groups.set(key,{start:note.start,duration:note.duration,notes:[]});
+    groups.get(key).notes.push(note);
   }
+  const center=group=>group.notes.reduce((sum,note)=>sum+note.pitch,0)/group.notes.length;
+  const ordered=[...groups.values()].sort((a,b)=>a.start-b.start ||
+    (preferLow?center(a)-center(b):center(b)-center(a)) || b.duration-a.duration);
+  const voices=[];
+  for(const group of ordered) {
+    const available=voices.filter(voice=>voice.end<=group.start)
+      .sort((a,b)=>Math.abs(a.pitch-center(group))-Math.abs(b.pitch-center(group)) || b.end-a.end);
+    const voice=available[0]||{end:0,pitch:center(group),groups:[]};
+    if(!available.length)voices.push(voice);
+    voice.groups.push(group);voice.end=group.start+group.duration;voice.pitch=center(group);
+  }
+  return voices.map(voice=>voice.groups);
+}
+function voicePieces(groups, measureStart, measureEnd, beatTicks) {
+  const pieces=[];
+  let position=measureStart;
+  const append=(start,end,active)=>{
+    for(const piece of durationPieces(end-start,start,measureStart,beatTicks))pieces.push({...piece,active});
+  };
+  for(const group of groups) {
+    const start=Math.max(measureStart,group.start),end=Math.min(measureEnd,group.start+group.duration);
+    if(end<=start)continue;
+    if(start>position)append(position,start,[]);
+    append(start,end,group.notes);position=end;
+  }
+  if(position<measureEnd)append(position,measureEnd,[]);
   return pieces;
 }
-function notesXML(pieces, staff, voice, instrument, flats) {
-  return pieces.map((piece, i) => {
-    if (!piece.active.length) return `<note><rest/>${staff ? `<duration>${piece.duration}</duration><voice>${voice}</voice><type>${piece.type}</type><staff>${staff}</staff>` : `<duration>${piece.duration}</duration><voice>${voice}</voice><type>${piece.type}</type>`}</note>`;
+function notesXML(pieces, staff, voice, instrument, flats, hideRests=false) {
+  return pieces.map(piece => {
+    const timing=`<duration>${piece.duration}</duration><voice>${voice}</voice><type>${piece.type}</type>${piece.dot?'<dot/>':''}`;
+    if (!piece.active.length) return `<note${hideRests?' print-object="no"':''}><rest/>${timing}${staff?`<staff>${staff}</staff>`:''}</note>`;
     const unique = [...new Map(piece.active.map(n => [n.pitch,n])).values()].sort((a,b) => a.pitch-b.pitch);
     return unique.map((n, j) => {
       const prev = n.start < piece.start, next = n.start + n.duration > piece.start + piece.duration;
@@ -41,7 +72,7 @@ function notesXML(pieces, staff, voice, instrument, flats) {
       const pos = drumPositions[n.pitch] || ['C',5];
       const position = instrument === 'drums' ? `<unpitched><display-step>${pos[0]}</display-step><display-octave>${pos[1]}</display-octave></unpitched>` : pitchXML(n.pitch, flats);
       const head = instrument === 'drums' && [42,44,46,49,51].includes(n.pitch) ? '<notehead parentheses="no">x</notehead>' : '';
-      return `<note>${j ? '<chord/>' : ''}${position}<duration>${piece.duration}</duration>${tie}<voice>${voice}</voice><type>${piece.type}</type>${head}${staff ? `<staff>${staff}</staff>` : ''}${instrument === 'drums' ? `<instrument id="D${n.pitch}"/>` : ''}${tied}</note>`;
+      return `<note>${j ? '<chord/>' : ''}${position}<duration>${piece.duration}</duration>${tie}<voice>${voice}</voice><type>${piece.type}</type>${piece.dot?'<dot/>':''}${head}${staff ? `<staff>${staff}</staff>` : ''}${instrument === 'drums' ? `<instrument id="D${n.pitch}"/>` : ''}${tied}</note>`;
     }).join('');
   }).join('');
 }
@@ -56,14 +87,24 @@ function renderPart(version, part, measureCount, measureTicks, partId) {
     ? `<score-part id="${partId}"><part-name>鼓</part-name>${[...new Set(version.notes.map(n=>n.pitch))].map(p=>`<score-instrument id="D${p}"><instrument-name>${xml(drumNames[p] || `打击乐 ${p}`)}</instrument-name><instrument-abbreviation>Perc</instrument-abbreviation></score-instrument><midi-instrument id="D${p}"><midi-channel>10</midi-channel><midi-unpitched>${p+1}</midi-unpitched></midi-instrument>`).join('')}</score-part>`
     : `<score-part id="${partId}"><part-name>${name}</part-name><score-instrument id="I${partId}"><instrument-name>${name}</instrument-name></score-instrument><midi-instrument id="I${partId}"><midi-channel>${{piano:1,guitar:2,bass:3}[version.instrument]}</midi-channel><midi-program>${{piano:1,guitar:25,bass:34}[version.instrument]}</midi-program></midi-instrument></score-part>`;
   const measures = [];
+  const upperVoices=allocateVoices(version.notes.filter(n=>!isPiano || n.hand==='right'||(!n.hand&&n.pitch>=60)));
+  const lowerVoices=isPiano?allocateVoices(version.notes.filter(n=>n.hand==='left'||(!n.hand&&n.pitch<60)),true):[];
+  const beatTicks=version.ppq*4/den*(den===8&&num%3===0?3:1);
   for (let m = 0; m < measureCount; m++) {
     const start = m*measureTicks, end = start+measureTicks;
     const attributes = m ? '' : `<attributes><divisions>${version.ppq}</divisions><key><fifths>${version.keyFifths}</fifths><mode>${version.keyMode ? 'minor':'major'}</mode></key><time><beats>${num}</beats><beat-type>${den}</beat-type></time>${isPiano ? '<staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef>' : `<clef>${clef}</clef>`}</attributes><direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${version.bpm}</per-minute></metronome></direction-type><sound tempo="${version.bpm}"/></direction>`;
-    const upper = version.notes.filter(n => n.start < end && n.start+n.duration > start &&
-      (!isPiano || n.hand==='right' || (!n.hand && n.pitch >= 60)));
-    const upperXML = notesXML(voicePieces(upper,start,end),isPiano ? 1 : null,1,version.instrument,version.keyFifths < 0);
-    const lowerXML = isPiano ? `<backup><duration>${measureTicks}</duration></backup>${notesXML(voicePieces(version.notes.filter(n => n.start < end && n.start+n.duration > start && (n.hand==='left'||(!n.hand&&n.pitch<60))),start,end),2,2,version.instrument,version.keyFifths < 0)}` : '';
-    measures.push(`<measure number="${m+1}">${attributes}${upperXML}${lowerXML}</measure>`);
+    const streams=[];
+    for(const [voices,staff,base] of [[upperVoices,isPiano?1:null,1],...(isPiano?[[lowerVoices,2,Math.max(1,upperVoices.length)+1]]:[])]) {
+      let visible=0;
+      for(const [index,groups] of voices.entries()) {
+        const active=groups.filter(group=>group.start<end&&group.start+group.duration>start);
+        if(!active.length)continue;
+        streams.push(notesXML(voicePieces(active,start,end,beatTicks),staff,base+index,version.instrument,version.keyFifths<0,visible>0));
+        visible++;
+      }
+      if(!visible)streams.push(notesXML(voicePieces([],start,end,beatTicks),staff,base,version.instrument,version.keyFifths<0));
+    }
+    measures.push(`<measure number="${m+1}">${attributes}${streams.join(`<backup><duration>${measureTicks}</duration></backup>`)}</measure>`);
   }
   return { partList, body:`<part id="${partId}">${measures.join('')}</part>` };
 }
