@@ -4,7 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { analyzeMidi, generateVersion, versionToMidi, INSTRUMENTS, DIFFICULTIES } = require('./midi');
 const { versionToMusicXML } = require('./musicxml');
-const { deleteVersion } = require('./library');
+const { deleteVersion,deleteSource } = require('./library');
 const { transcribeWithSheetSage } = require('./sheetsage2');
 const { transcribedNotesToMidi } = require('./audio-import');
 const { enhancePianoVersion, renameMusicXML } = require('./piano');
@@ -18,6 +18,7 @@ const TRANSCRIPTION_REVISION='sheetsage2-arrangements-v1';
 let libraryRoot;
 let pendingAudio=null;
 const transcriptionWorkers=new Set();
+const generatingSongs=new Set();
 if (process.env.SCORESPROUT_TEST_DATA) {
   fs.mkdirSync(process.env.SCORESPROUT_TEST_DATA,{recursive:true});
   app.setPath('userData',path.resolve(process.env.SCORESPROUT_TEST_DATA));
@@ -185,33 +186,38 @@ app.whenReady().then(() => {
     return { bpm:source.audioBaseBpm||source.bpm, instrument:track.detected, notes:track.notes.map(n=>({ ...n,start:n.start*480/source.sourcePpq,duration:n.duration*480/source.sourcePpq })).slice(0,1500) };
   }));
   ipcMain.handle('generate-version', wrap(async (id,trackIds,choice,difficultyOrTitle,titleOrAssignments,manual,settings) => {
-    const {source} = ensureSource(id);
-    let manifest;
-    const multiple = Array.isArray(trackIds);
-    const instrument = multiple ? (source.inputType==='mp3' ? manual||'piano' : 'auto') : choice;
-    const difficulty = multiple ? choice : difficultyOrTitle;
-    const title = multiple ? difficultyOrTitle : titleOrAssignments;
-    const assignments = multiple ? titleOrAssignments || {} : manual;
-    const version = generateVersion(source,trackIds,instrument,difficulty,title,assignments,{deferPianoDifficulty:true,settings});
-    const {musicxml} = await enhancePianoVersion(version,source.inputType);
-    manifest=readManifest(id);
-    manifest.title = version.title;
-    let key = version.trackIds.length === 1 ? `${version.trackId}|${version.instrument}|${difficulty}` :
-      `${version.instrument}|${version.trackIds.slice().sort().join('|')}|${Object.entries(version.assignments).sort().map(([id,value])=>`${id}:${value}`).join('|')}|${difficulty}`;
-    if(version.arrangementSettings)key+='|lead-piano-v2|'+JSON.stringify(version.arrangementSettings);
-    const variantId = `${version.instrument}-${difficulty}-${crypto.createHash('sha256').update(key).digest('hex').slice(0,12)}`;
-    const dir = path.join(songDir(id),'variants'); fs.mkdirSync(dir,{recursive:true});
-    writeJSON(path.join(dir,`${variantId}.json`),version);
-    fs.writeFileSync(path.join(dir,`${variantId}.musicxml`),layoutMusicXML(musicxml),'utf8');
-    fs.writeFileSync(path.join(dir,`${variantId}.mid`),versionToMidi(version));
-    const entry = { id:variantId, songId:id, title:version.title, instrument:version.instrument, difficulty,
-      trackId:version.trackId,trackIds:version.trackIds,assignments:version.assignments,
-      ...(version.arrangementSettings?{arrangementSettings:version.arrangementSettings}:{}),
-      trackName:version.trackName, noteCount:version.notes.length, generatedAt:new Date().toISOString() };
-    manifest.variants = manifest.variants.filter(v=>v.id!==variantId).concat(entry);
-    writeJSON(manifestPath(id),manifest);
-    const savedXML=fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8');
-    return { ...entry, version, musicxml:savedXML,readable:readableScore(version,savedXML) };
+    safeId(id);
+    if(generatingSongs.has(id))throw Error('这首歌曲正在生成乐谱，请稍后再试。');
+    generatingSongs.add(id);
+    try {
+      const {source} = ensureSource(id);
+      let manifest;
+      const multiple = Array.isArray(trackIds);
+      const instrument = multiple ? (source.inputType==='mp3' ? manual||'piano' : 'auto') : choice;
+      const difficulty = multiple ? choice : difficultyOrTitle;
+      const title = multiple ? difficultyOrTitle : titleOrAssignments;
+      const assignments = multiple ? titleOrAssignments || {} : manual;
+      const version = generateVersion(source,trackIds,instrument,difficulty,title,assignments,{deferPianoDifficulty:true,settings});
+      const {musicxml} = await enhancePianoVersion(version,source.inputType);
+      manifest=readManifest(id);
+      manifest.title = version.title;
+      let key = version.trackIds.length === 1 ? `${version.trackId}|${version.instrument}|${difficulty}` :
+        `${version.instrument}|${version.trackIds.slice().sort().join('|')}|${Object.entries(version.assignments).sort().map(([id,value])=>`${id}:${value}`).join('|')}|${difficulty}`;
+      if(version.arrangementSettings)key+='|lead-piano-v2|'+JSON.stringify(version.arrangementSettings);
+      const variantId = `${version.instrument}-${difficulty}-${crypto.createHash('sha256').update(key).digest('hex').slice(0,12)}`;
+      const dir = path.join(songDir(id),'variants'); fs.mkdirSync(dir,{recursive:true});
+      writeJSON(path.join(dir,`${variantId}.json`),version);
+      fs.writeFileSync(path.join(dir,`${variantId}.musicxml`),layoutMusicXML(musicxml),'utf8');
+      fs.writeFileSync(path.join(dir,`${variantId}.mid`),versionToMidi(version));
+      const entry = { id:variantId, songId:id, title:version.title, instrument:version.instrument, difficulty,
+        trackId:version.trackId,trackIds:version.trackIds,assignments:version.assignments,
+        ...(version.arrangementSettings?{arrangementSettings:version.arrangementSettings}:{}),
+        trackName:version.trackName, noteCount:version.notes.length, generatedAt:new Date().toISOString() };
+      manifest.variants = manifest.variants.filter(v=>v.id!==variantId).concat(entry);
+      writeJSON(manifestPath(id),manifest);
+      const savedXML=fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8');
+      return { ...entry, version, musicxml:savedXML,readable:readableScore(version,savedXML) };
+    } finally {generatingSongs.delete(id);}
   }));
   ipcMain.handle('list-library', wrap(() => {
     const items=[];
@@ -234,6 +240,10 @@ app.whenReady().then(() => {
     return { entry:m.variants.find(v=>v.id===variantId),version,musicxml,readable:readableScore(version,musicxml) };
   }));
   ipcMain.handle('delete-version', wrap((songId,variantId) => deleteVersion(libraryRoot,songId,variantId)));
+  ipcMain.handle('delete-source', wrap(songId => {
+    if(generatingSongs.has(songId))throw Error('这首歌曲正在生成乐谱，请完成后再删除源文件。');
+    return deleteSource(libraryRoot,songId);
+  }));
   ipcMain.handle('export-version', wrap(async (songId,variantId,format,options={}) => {
     const m=readManifest(songId), v=m.variants.find(v=>v.id===variantId);
     if (!v) throw new Error('版本不存在。');

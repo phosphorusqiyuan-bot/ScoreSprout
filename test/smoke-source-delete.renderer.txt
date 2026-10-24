@@ -1,0 +1,23 @@
+(async()=>{
+  const check=(value,message)=>{if(!value)throw Error(message);};
+  await importMidi();
+  const id=state.source.id,item=state.library.find(v=>v.sourceOnly&&v.songId===id);
+  const button=[...document.querySelectorAll('.library-delete')].find(b=>b.dataset.id===item?.id);
+  check(button?.textContent==='删除源文件','源文件缺少删除按钮');
+  button.click();check($('deleteDialog').open&&$('confirmDelete').textContent==='删除源文件','源文件确认框缺失');
+  check($('deleteExplanation').textContent.includes('导入前的原文件'),'确认框没有说明删除范围');
+  $('cancelDelete').click();await new Promise(resolve=>setTimeout(resolve,30));
+  check((await window.scoresprout.getSource(id)).tracks.length>0,'取消删除仍移除了源文件');
+  await preview(state.source.tracks[0].id);check(previewPlayer.playing,'轨道试听未开始');
+  button.click();$('confirmDelete').click();
+  for(let i=0;i<200&&state.deleting;i++)await new Promise(resolve=>setTimeout(resolve,20));
+  check(!$('deleteDialog').open&&!state.deleting,'源文件删除未完成');
+  check(!state.source&&!state.entry&&!previewPlayer.playing&&$('workspace').classList.contains('hidden'),'已删除源文件仍留在界面或试听中');
+  check(!state.library.some(v=>v.songId===id)&&state.library.length===1,'删除源文件影响了其他歌曲');
+  const protectedId='e'.repeat(24);let blocked=false;
+  try {await window.scoresprout.deleteSource(protectedId);} catch(error) {blocked=/已有乐谱/.test(error.message);}
+  check(blocked,'后端没有保护已有乐谱的歌曲');
+  await importMidi();check(state.source.id===id,'删除后无法重新导入同一文件');
+  await window.scoresprout.deleteSource(id);
+  return {deleted:id,cancel:true,confirmed:true,previewStopped:true,protectedScore:true,reimport:true};
+})()

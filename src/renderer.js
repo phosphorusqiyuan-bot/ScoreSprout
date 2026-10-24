@@ -279,27 +279,34 @@ function renderLibrary() {
     button.append(title,meta);
     button.disabled=busy;
     button.addEventListener('click',()=>guarded(()=>openLibrary(item)));
-    if(item.sourceOnly){row.append(button);box.append(row);continue;}
     const remove=document.createElement('button'); remove.type='button'; remove.className='library-delete';
-    remove.textContent='删除'; remove.dataset.id=item.id;
-    remove.setAttribute('aria-label',`删除 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
+    remove.textContent=item.sourceOnly?'删除源文件':'删除'; remove.dataset.id=item.id;
+    remove.setAttribute('aria-label',item.sourceOnly?`删除源文件 ${item.title}`:`删除 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
     remove.addEventListener('click',()=>requestDelete(item));
     remove.disabled=busy;
-    const regenerate=document.createElement('button');regenerate.type='button';regenerate.className='library-regenerate';
-    regenerate.textContent=state.regenerating===item.id?'生成中…':'重新生成';regenerate.dataset.id=item.id;
-    regenerate.title='使用原始 MIDI 和此版本的轨道、乐器、难度重新生成';
-    regenerate.setAttribute('aria-label',`重新生成 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
-    regenerate.disabled=busy;
-    regenerate.addEventListener('click',()=>guarded(()=>regenerateLibrary(item)));
-    const actions=document.createElement('div');actions.className='library-actions';actions.append(regenerate,remove);
+    const actions=document.createElement('div');actions.className='library-actions';
+    if(!item.sourceOnly){
+      const regenerate=document.createElement('button');regenerate.type='button';regenerate.className='library-regenerate';
+      regenerate.textContent=state.regenerating===item.id?'生成中…':'重新生成';regenerate.dataset.id=item.id;
+      regenerate.title='使用原始 MIDI 和此版本的轨道、乐器、难度重新生成';
+      regenerate.setAttribute('aria-label',`重新生成 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
+      regenerate.disabled=busy;
+      regenerate.addEventListener('click',()=>guarded(()=>regenerateLibrary(item)));
+      actions.append(regenerate);
+    }
+    actions.append(remove);
     row.append(button,actions); box.append(row);
   }
 }
 function requestDelete(item) {
   if (!item || state.deleting) return;
   state.pendingDelete=item;
-  $('deleteTitle').textContent=`删除「${item.title} · ${levels[item.difficulty]}」？`;
-  $('deleteDetails').textContent=`${names[item.instrument]} · ${item.trackName}`;
+  $('deleteTitle').textContent=item.sourceOnly?`删除源文件「${item.title}」？`:`删除「${item.title} · ${levels[item.difficulty]}」？`;
+  $('deleteDetails').textContent=item.sourceOnly?'此歌曲尚无已保存的乐谱。':`${names[item.instrument]} · ${item.trackName}`;
+  $('deleteExplanation').textContent=item.sourceOnly?
+    '将永久删除这首歌在音乐库中的 MIDI / MP3 副本及元数据。导入前的原文件和已导出的文件不受影响；再次使用时需要重新导入。':
+    '将删除此版本及其音乐库内的文件。原始 MIDI、其他版本和已导出的文件会保留。';
+  $('confirmDelete').textContent=item.sourceOnly?'删除源文件':'删除此版本';
   $('deleteError').textContent='';
   $('deleteDialog').showModal(); $('cancelDelete').focus();
 }
@@ -308,8 +315,14 @@ async function confirmDeleteScore() {
   if (!item || state.deleting) return;
   state.deleting=true; $('confirmDelete').disabled=true; $('cancelDelete').disabled=true;
   try {
-    const result=await window.scoresprout.deleteVersion(item.songId,item.id);
-    if (state.entry?.id===item.id && state.entry?.songId===item.songId) {
+    const result=item.sourceOnly?await window.scoresprout.deleteSource(item.songId):await window.scoresprout.deleteVersion(item.songId,item.id);
+    if (item.sourceOnly&&state.source?.id===item.songId) {
+      player.load([],120,'piano');previewPlayer.stop();setPlaybackMode('score');resetPreviewButtons();
+      clearScoreCursor();state.source=null;state.entry=null;state.trackIds=[];state.assignments={};
+      scoreDisplay=null;displayedVersion=null;scoreData=null;notationVersion=null;scoreViewGeneration++;metronomeStorageKey='';
+      $('score').replaceChildren();$('result').classList.add('hidden');$('workspace').classList.add('hidden');$('emptyState').classList.remove('hidden');
+      $('pageTitle').textContent='开始一首新曲目';$('pageSubtitle').textContent='导入 MIDI 或 MP3，选择乐器与难度，生成适合演奏的乐谱。';
+    } else if (!item.sourceOnly&&state.entry?.id===item.id && state.entry?.songId===item.songId) {
       player.load([],120,'piano'); previewPlayer.stop();setPlaybackMode('score');resetPreviewButtons();
       clearScoreCursor();
       state.entry=null; $('playBtn').textContent='▶';
@@ -317,7 +330,7 @@ async function confirmDeleteScore() {
       $('score').replaceChildren(); $('result').classList.add('hidden');
     }
     await refreshLibrary(); $('deleteDialog').close();
-    notice(result.warning || '乐谱已删除。原始 MIDI 已保留，可以重新选择轨道和难度生成。',result.warning?'':'success');
+    notice(result.warning || (item.sourceOnly?'源文件已从音乐库删除。导入前的原文件和已导出文件不受影响。':'乐谱已删除。原始 MIDI 已保留，可以重新选择轨道和难度生成。'),result.warning?'':'success');
   } catch (error) {
     $('deleteError').textContent=error.message||String(error);
   } finally {

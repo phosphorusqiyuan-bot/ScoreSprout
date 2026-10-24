@@ -1,0 +1,7 @@
+(async()=>{
+  const library=await window.scoresprout.listLibrary();
+  if(library.length!==1||library[0].sourceOnly||library[0].songId!=='e'.repeat(24))throw Error('重启后删除未保留，或其他乐谱被影响');
+  const loaded=await window.scoresprout.loadVersion(library[0].songId,library[0].id);
+  if(!loaded.version.notes.length)throw Error('其他乐谱无法读取');
+  return {restart:true,remainingScores:1,sourceDeleted:true};
+})()

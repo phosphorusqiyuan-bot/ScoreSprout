@@ -50,6 +50,8 @@ corepack pnpm start
 5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。每个版本旁的「重新生成」会沿用原始 MIDI、轨道、乐器和难度，用最新规则更新此版本；MP3 使用已保存的转写 MIDI，不重复运行转写模型。选择另一难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
 6. 点击音乐库条目旁的「删除」或结果区的「删除乐谱」，确认后移除此版本。原始 MIDI、其他版本和已导出的文件会保留；当前打开的版本被删除时，播放会停止，仍可重新生成。
 
+没有乐谱版本的歌曲会显示「删除源文件」。确认后永久移除音乐库中的 MIDI / MP3 副本和元数据，导入前的原文件、其他歌曲与已导出的文件不会删除。正在生成或仍有乐谱版本的歌曲不能直接删除源文件；删除最后一个乐谱版本后，可再选择是否删除源文件。
+
 谱面默认执行易读整理并按拍子自动连梁（六八拍按三个八分音符分组），弱起小节保留正确的拍子位置。整理只改变记谱呈现：轻微偏离网格的音头、短收尾和短空隙会被收整，符合严格条件的孤立短经过音可显示为装饰音；连续快音、重复起音和明确休止不会被隐藏。指法放在各手谱表外侧，避免重复绘制；辅助声部被其他长音覆盖的休止符会隐藏。结果区提供「谱面大小」和「显示指法」，窗口大小变化后会重新排版并定位播放光标。旧谱重新打开即可应用排版优化，无需重新转写或生成；PDF 与 MusicXML 默认导出优化谱面，试听和 MIDI 仍使用生成时保存的音符数据。
 
 点击结果区的「导出 PDF」，选择保存位置，即可导出 A4 竖版乐谱。PDF 使用当前的谱面大小和指法显示设置，按纸张宽度重新排版并自动分页，保持每组左右手谱表完整，包含歌曲名、难度、乐器与页码。导出使用 Electron 内置打印引擎，本地完成，无需安装 MuseScore、PDF 打印机或联网；当前试听和播放光标不会受影响。旧音乐库中的版本也可以直接导出。
@@ -77,10 +79,11 @@ corepack pnpm smoke
 node scripts/smoke-polish.js      # 检查长音衰减、多声部谱面、重新生成、错误位置与配色重启恢复
 node scripts/smoke-rhythm-case.js # 检查速度元数据偏差、弱起小节及实际窗口的播放光标；也可追加本地 MIDI 路径
 node scripts/smoke-pdf.js <音乐库目录> # 在隔离副本中通过界面按钮检查 PDF 导出
+node scripts/smoke-source-delete.js # 检查源文件删除、取消、重启与重新导入；成功后自动清理临时目录
 node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetSage2 端到端测试
 ```
 
-`smoke` 会启动真正的 Electron 应用七次：前四次验证 MIDI 生成、导出、播放、删除与重启读取；第五次验证降采样；后两次用真实 MP3 验证解码、钢琴谱渲染、MIDI 导出及重启读取。后两次使用固定 MIDI 夹具替代大型模型，因此不评估 SheetSage2 的音高识别质量。结果和导出文件位于项目下自动创建的 `.smoke-*` 目录。测试音频 `samples/440hz-test.mp3` 来自 [badgerodon/mp3](https://github.com/badgerodon/mp3)（MIT License）。
+`smoke` 会启动真正的 Electron 应用七次：前四次验证 MIDI 生成、导出、播放、删除与重启读取；第五次验证降采样；后两次用真实 MP3 验证解码、钢琴谱渲染、MIDI 导出及重启读取。后两次使用固定 MIDI 夹具替代大型模型，因此不评估 SheetSage2 的音高识别质量。结果和导出文件位于项目下自动创建的 `.smoke-*` 临时目录；这些测试副本、截图与缓存不是运行依赖，可删除，正式音乐库保存在 userData 目录。测试音频 `samples/440hz-test.mp3` 来自 [badgerodon/mp3](https://github.com/badgerodon/mp3)（MIT License）。
 
 `smoke-sheetsage2.js` 使用仓库内自行合成的 16 音旋律 MP3 和真实模型，检查音高顺序、四种乐器的谱面、MIDI / MusicXML 导出与重启读取。当前实测输出 17 音，末尾多一个伴奏音；该测试不能代表任意流行歌曲的转写准确率。测试音频可用 `node scripts/generate-sheetsage2-probe.js` 生成 PCM，再执行 `ffmpeg -f f32le -ar 22050 -ac 1 -i .sheetsage2-runtime/probe.f32 -codec:a libmp3lame -q:a 2 samples/sheetsage2-melody.mp3` 重新生成。
 
@@ -164,6 +167,8 @@ You can find MIDI files at [MidiShow](https://www.midishow.com/), [BitMidi](http
 5. Reopen saved versions from the local library, or filter by song, instrument, and difficulty. **重新生成** beside each version uses its original MIDI, selected tracks, instrument, and difficulty to update it with the current rules. MP3 versions reuse their saved transcription MIDI without running the transcription model again. Generate another difficulty to save another version. Different instruments of the same song have separate internal IDs.
 6. Click **删除** (Delete) beside a library entry or **删除乐谱** (Delete score) in the result panel, then confirm. Only that version is removed; the original MIDI, other versions, and exported files are kept. Deleting the open version stops playback, and you can generate it again from the retained source.
 
+Songs without saved score versions offer **删除源文件** (Delete source). Confirmation permanently removes the library's MIDI / MP3 copies and metadata; the originally imported file, other songs, and exported files are kept. Sources with saved scores or ongoing generation are protected. After deleting the last score version, you can choose whether to delete its source as well.
+
 Notes are beamed by beat (in groups of three eighths for 6/8), with pickup measures aligned to the end of a bar. Fingerings sit outside each hand's staff without duplicate rendering; auxiliary rests covered by another sounding note are hidden. Use **谱面大小** (Score size) and **显示指法** (Show fingerings) above the score. Resizing the window reflows the score and updates the playhead. Reopening an old score applies the engraving improvements without transcription or regeneration. MusicXML exports include the beaming and fingering placement; pitches and playback timing stay unchanged.
 
 Click **导出 PDF** (Export PDF) in the result panel and choose a destination. The A4 portrait PDF honors the current score size and fingering visibility, reflows to the printable width, and keeps each grand-staff system together. It includes the song title, difficulty, instrument, and page numbers. Export runs locally through Electron's built-in print engine without MuseScore, a PDF printer, or network access, and leaves playback and the playhead untouched. Saved library versions can be exported directly.
@@ -193,6 +198,7 @@ corepack pnpm smoke
 node scripts/smoke-polish.js      # Decay, polyphonic notation, regeneration, inline errors, and theme persistence.
 node scripts/smoke-rhythm-case.js # Tempo-metadata mismatch, pickup measures, and cursor timing; optionally append a local MIDI path.
 node scripts/smoke-pdf.js <library-directory> # Exercise the PDF export button using an isolated library copy.
+node scripts/smoke-source-delete.js # Cancellation, deletion, restart, and reimport; removes its temporary directory on success.
 node scripts/smoke-sheetsage2.js   # After model setup, run the real SheetSage2 end-to-end test.
 ```
 

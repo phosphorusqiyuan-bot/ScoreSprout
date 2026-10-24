@@ -42,4 +42,26 @@ function deleteVersion(libraryRoot, songId, variantId) {
   return { deleted:true, warning:cleanupFailed ? '乐谱已移出音乐库，但部分临时文件未能清理。' : '' };
 }
 
-module.exports = { deleteVersion };
+function deleteSource(libraryRoot,songId) {
+  if(typeof songId!=='string'||!/^[a-f0-9]{24}$/.test(songId))throw Error('音乐库项目标识无效。');
+  const root=fs.realpathSync(libraryRoot),dir=path.join(root,songId);
+  if(!fs.existsSync(dir))throw Error('此源文件已删除或不存在。');
+  // Never recursively remove a linked folder or anything outside this library.
+  if(fs.lstatSync(dir).isSymbolicLink()||path.dirname(fs.realpathSync(dir))!==root)
+    throw Error('源文件目录异常，无法删除。');
+  const manifest=JSON.parse(fs.readFileSync(path.join(dir,'manifest.json'),'utf8'));
+  if(!Array.isArray(manifest.variants))throw Error('源文件信息损坏，无法安全删除。');
+  if(manifest.variants.length)throw Error('此歌曲已有乐谱，请先删除所有乐谱版本，再删除源文件。');
+  const variants=path.join(dir,'variants');
+  if(fs.existsSync(variants)&&fs.readdirSync(variants).length)
+    throw Error('此源文件仍有关联的乐谱文件，请检查音乐库后重试。');
+  // Atomically remove the source from the visible library before cleaning up.
+  const removed=path.join(root,`.deleted-source-${songId}-${crypto.randomUUID()}`);
+  if(path.dirname(path.resolve(removed))!==root)throw Error('源文件目录异常，无法删除。');
+  fs.renameSync(dir,removed);
+  try {fs.rmSync(removed,{recursive:true,force:true,maxRetries:2,retryDelay:100});}
+  catch {return {deleted:true,warning:'源文件已移出音乐库，但部分本地副本未能清理。请关闭占用文件的软件后清理音乐库中的 .deleted-source 临时目录。'};}
+  return {deleted:true,warning:''};
+}
+
+module.exports = { deleteVersion,deleteSource };

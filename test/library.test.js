@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const {deleteVersion}=require('../src/library');
+const {deleteVersion,deleteSource}=require('../src/library');
 
 const songId='a'.repeat(24);
 const first='piano-full-0123456789ab', second='guitar-beginner-abcdef123456';
@@ -55,4 +55,40 @@ test('音乐库写入失败时恢复原有乐谱文件',t=>{
   assert.equal(f.manifest().variants.length,2);
   for(const ext of ['json','mid','musicxml'])assert(fs.existsSync(path.join(f.variants,`${first}.${ext}`)));
   assert(!fs.readdirSync(f.variants).some(name=>name.includes('.deleting-')));
+});
+
+test('删除未生成乐谱的源文件，移除音乐库副本但保留外部原文件与其他歌曲',t=>{
+  const f=fixture(t),pending='b'.repeat(24),dir=path.join(f.library,pending);
+  fs.mkdirSync(dir);fs.mkdirSync(path.join(dir,'variants'));
+  fs.writeFileSync(path.join(dir,'manifest.json'),JSON.stringify({variants:[],sourceType:'mp3'}));
+  for(const name of ['original.mid','original.mp3'])fs.writeFileSync(path.join(dir,name),'library copy');
+  const external=path.join(f.library,'external-original.mp3');fs.writeFileSync(external,'external file');
+  assert.deepEqual(deleteSource(f.library,pending),{deleted:true,warning:''});
+  assert(!fs.existsSync(dir));assert.equal(fs.readFileSync(external,'utf8'),'external file');
+  assert.equal(f.manifest().variants.length,2);assert(fs.existsSync(path.join(f.song,'original.mid')));
+  assert(!fs.readdirSync(f.library).some(name=>name.startsWith('.deleted-source-')));
+});
+
+test('拒绝删除已有乐谱、越界路径和丢失的源文件',t=>{
+  const f=fixture(t);
+  assert.throws(()=>deleteSource(f.library,songId),/已有乐谱/);
+  assert.throws(()=>deleteSource(f.library,'../outside'),/标识无效/);
+  assert.throws(()=>deleteSource(f.library,'f'.repeat(24)),/不存在/);
+  assert.equal(f.manifest().variants.length,2);
+});
+
+test('空版本清单下仍有乐谱文件时保留歌曲，防止误删未登记的乐谱',t=>{
+  const f=fixture(t);
+  fs.writeFileSync(path.join(f.song,'manifest.json'),JSON.stringify({variants:[]}));
+  assert.throws(()=>deleteSource(f.library,songId),/关联的乐谱文件/);
+  assert(fs.existsSync(path.join(f.variants,first+'.musicxml')));
+});
+
+test('拒绝递归删除链接到其他位置的源文件目录',t=>{
+  const f=fixture(t),linkId='b'.repeat(24),link=path.join(f.library,linkId);
+  fs.symlinkSync(f.song,link,process.platform==='win32'?'junction':'dir');
+  try {
+    assert.throws(()=>deleteSource(f.library,linkId),/目录异常/);
+    assert(fs.existsSync(path.join(f.song,'original.mid')));
+  } finally {fs.unlinkSync(link);}
 });
