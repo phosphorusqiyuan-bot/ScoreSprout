@@ -273,7 +273,7 @@ app.whenReady().then(() => {
     return chosen.filePath;
   }));
 
-  const win=new BrowserWindow({width:1450,height:930,minWidth:1050,minHeight:700,show:!process.env.SCORESPROUT_SMOKE_STAGE,backgroundColor:'#f7f7f2',
+  const win=new BrowserWindow({width:1450,height:930,minWidth:1050,minHeight:700,show:!process.env.SCORESPROUT_SMOKE_STAGE,backgroundColor:'#f7f7f2',icon:path.join(__dirname,'assets','logo.ico'),
     webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,
       offscreen:['rhythm-case','layout','lead-mode','practice','metronome','stability'].includes(process.env.SCORESPROUT_SMOKE_STAGE)} });
   win.webContents.setWindowOpenHandler(({url}) => {

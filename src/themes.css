@@ -36,6 +36,8 @@
 :root,body { background:var(--page); color:var(--ink); }
 .sidebar { background:var(--side); color:var(--side-ink); }
 .mark,.primary { background:var(--primary); color:var(--primary-ink); }
+.mark { background:transparent; }
+.mark img { display:block; width:42px; height:42px; border-radius:12px; }
 .primary:hover { background:var(--primary-hover); }
 .brand span,.side-heading h3,.side-footer,.library-item span,.library-empty { color:var(--side-muted); }
 .side-heading span { background:var(--side-active); color:var(--side-ink); }

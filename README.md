@@ -1,5 +1,7 @@
 # ScoreSprout
 
+<img src="src/assets/logo.svg" width="96" height="96" alt="ScoreSprout · 谱芽 — sprouting eighth note logo">
+
 [简体中文](#简体中文) · [English](#english)
 
 ## 简体中文

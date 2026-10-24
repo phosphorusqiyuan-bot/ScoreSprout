@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="谱芽：长出嫩芽的八分音符">
+  <rect width="256" height="256" rx="68" fill="#B8E387"/>
+  <g fill="#193D29">
+    <ellipse cx="91" cy="183" rx="35" ry="24" transform="rotate(-22 91 183)"/>
+    <path d="M112 180V66" fill="none" stroke="#193D29" stroke-width="13" stroke-linecap="round"/>
+    <!-- The left leaf grows from the stem; the right leaf is the eighth-note flag. -->
+    <path d="M113 78C85 80 64 64 62 43C90 40 112 53 113 78Z"/>
+    <path d="M112 68C133 44 164 38 194 49C187 70 174 87 153 94C148 96 145 101 142 111C143 93 132 81 112 78Z"/>
+  </g>
+  <path d="M124 70C142 59 162 54 179 54" fill="none" stroke="#B8E387" stroke-width="3" stroke-linecap="round" opacity=".65"/>
+</svg>
