@@ -1,0 +1,64 @@
+(async()=>{
+  const check=(value,message)=>{if(!value)throw Error(message);};
+  const items=await window.scoresprout.listLibrary(),item=items[0];check(item,'No saved score');
+  const data=await window.scoresprout.loadVersion(item.songId,item.id),original=JSON.stringify(data.version.notes);
+  $('workspace').classList.remove('hidden');$('emptyState').classList.add('hidden');
+  await renderVersion(data);
+  const tiny=xml=>(xml.match(/<type>(?:32nd|64th)<\/type>/g)||[]).length;
+  check(!document.getElementById('readableScore'),'Readable view toggle should be absent');
+  check(notationVersion.readability,'Readable score not loaded');
+  const before=tiny(data.musicxml),after=tiny(data.readable.musicxml);
+  check(after<=before,'Readability adds tiny notes');
+  check(scoreAnchors.length===new Set(notationVersion.notes.map(n=>n.start)).size,'Readable attacks missing from cursor');
+  check(scoreAnchors.every((a,i)=>!i||a.tick>=scoreAnchors[i-1].tick),'Performance cursor moves backwards');
+  $('showFingerings').checked=false;redrawScore();$('showFingerings').checked=true;redrawScore();
+  const fingers=scoreDisplay.GraphicSheet.MeasureList.flat().filter(Boolean).flatMap(m=>m.staffEntries).reduce((sum,s)=>sum+s.FingeringEntries.length,0);
+  const expectedFingers=(data.readable.musicxml.match(/<fingering\b/g)||[]).length;
+  check(fingers>0||expectedFingers===0,'Readable score lost all fingerings');
+  await renderScoreView();
+  check(notationVersion.readability,'Re-render lost the optimized score');
+  check(scoreAnchors.length===new Set(notationVersion.notes.map(n=>n.start)).size,'Optimized-view cursor lost attacks');
+  check(JSON.stringify(data.version.notes)===original,'Display changed playback notes');
+  $('metronome').checked=true;$('metronome').dispatchEvent(new Event('change'));
+  check(player.metronome&&previewPlayer.metronome,'Switch did not enable both players');
+  player.seek(data.version.notes[0].start*60/(data.version.bpm*480));
+  await player.play();
+  check(player.playing&&player.pianoBuffers.size>0,'Local piano recordings did not load');
+  check(player.active.size>0,'Piano did not schedule any samples');
+  check(player.clicks.size>0,'Metronome did not schedule clicks');
+  const active=player.active.size;$('metronome').checked=false;$('metronome').dispatchEvent(new Event('change'));
+  check(player.playing&&player.active.size===active&&player.clicks.size===0,'Disabling click stopped piano or left clicks sounding');
+  player.pause();check(!player.active.size&&!player.clicks.size,'Pause left scheduled audio');
+  // Decode and render actual local recordings in Chromium, not a mocked synth.
+  const rate=22050,ctx=new OfflineAudioContext(1,rate*6,rate),audio=new ScorePlayer(()=>{},()=>{});audio.ctx=ctx;audio.instrument='piano';
+  const pitches=[48,60,64,67,72];await audio.preparePiano(pitches.map(pitch=>({pitch})));
+  check([...audio.pianoBuffers.values()].every(buffer=>buffer.duration>1),'Invalid MP3 piano samples');
+  let oscillators=0;const createOscillator=ctx.createOscillator.bind(ctx);ctx.createOscillator=()=>{oscillators++;return createOscillator();};
+  pitches.forEach((pitch,i)=>audio.sound({pitch,velocity:88},i*.5,2));
+  check(oscillators===0,'Piano still uses a synthesizer');
+  const buffer=await ctx.startRendering(),samples=buffer.getChannelData(0),rms=(a,b)=>{
+    const part=samples.slice(a*rate,b*rate);return Math.sqrt(part.reduce((s,v)=>s+v*v,0)/part.length);
+  };
+  check(rms(.05,.4)>.001,'Piano rendered silence');check(rms(5,5.5)<.001,'Piano note-offs left a stuck voice');
+  const clickContext=new OfflineAudioContext(1,rate*2,rate),clock=new ScorePlayer(()=>{},()=>{});clock.ctx=clickContext;
+  clock.load([{pitch:60,start:0,duration:1440}],120,'piano',null,{timeSignature:[3,4]});
+  for(const beat of clock.beats)clock.click(beat.seconds,beat.accent);
+  const clickSamples=(await clickContext.startRendering()).getChannelData(0),energy=(a,b)=>{
+    const part=clickSamples.slice(Math.floor(a*rate),Math.floor(b*rate));return Math.sqrt(part.reduce((s,v)=>s+v*v,0)/part.length);
+  };
+  check(energy(.005,.025)>energy(.505,.525)*1.3,'Metronome downbeat is not accented');
+  check(energy(.505,.525)>.001&&energy(.2,.3)<.00001,'Metronome pulse timing is incorrect');
+  // A short, original C-major sampling demo, suitable for listening inspection.
+  const wav=new ArrayBuffer(44+samples.length*2),view=new DataView(wav),text=(at,s)=>[...s].forEach((c,i)=>view.setUint8(at+i,c.charCodeAt(0)));
+  text(0,'RIFF');view.setUint32(4,wav.byteLength-8,true);text(8,'WAVE');text(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);
+  view.setUint32(24,rate,true);view.setUint32(28,rate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);text(36,'data');view.setUint32(40,samples.length*2,true);
+  for(let i=0;i<samples.length;i++)view.setInt16(44+i*2,Math.max(-1,Math.min(1,samples[i]))*32767,true);
+  let binary='';for(const byte of new Uint8Array(wav))binary+=String.fromCharCode(byte);
+  const exported=await window.scoresprout.exportVersion(item.songId,item.id,'musicxml');check(exported,'Optimized MusicXML export failed');
+  const first=notationVersion.notes[0],seconds=first.start*60/(data.version.bpm*480);
+  player.seek(seconds);$('result').scrollIntoView({block:'start'});
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  return {notes:data.version.notes.length,notationNotes:notationVersion.notes.length,tinyBefore:before,tinyAfter:after,
+    graceNotes:data.readable.stats.graceNotes,omittedAccompanimentFragments:data.readable.stats.omittedAccompanimentFragments,fingeringLabels:fingers,expectedFingers,anchors:scoreAnchors.length,
+    localPianoSamples:player.pianoBuffers.size,pianoOscillators:oscillators,pianoRMS:rms(.05,.4),metronomeToggle:true,metronomeAudio:true,optimizedView:true,exported,wavBase64:btoa(binary)};
+})()

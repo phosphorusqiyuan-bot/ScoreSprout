@@ -1,11 +1,12 @@
 {
   "name": "scoresprout",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "packageManager": "pnpm@11.25.0",
   "description": "本地 MIDI 简化乐谱桌面软件",
   "main": "src/main.js",
   "scripts": {
+    "build:metronome": "node scripts/build-metronome.js",
     "start": "electron .",
     "test": "node --test",
     "samples": "node scripts/generate-samples.js",
@@ -13,10 +14,14 @@
     "smoke:sheetsage2": "node scripts/smoke-sheetsage2.js"
   },
   "dependencies": {
+    "@pepperhorn/react-music-tools": "0.1.0",
     "midi-file": "^1.2.4",
-    "opensheetmusicdisplay": "1.9.9"
+    "opensheetmusicdisplay": "1.9.9",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "electron": "^38.0.0"
+    "electron": "^38.0.0",
+    "esbuild": "0.28.2"
   }
 }

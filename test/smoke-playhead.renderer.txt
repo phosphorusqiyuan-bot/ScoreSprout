@@ -27,13 +27,26 @@
   await new Promise(resolve=>setTimeout(resolve,650));
   const rect=scorePlayhead.getBoundingClientRect();
   if(!player.playing||!scorePlayhead.isConnected||
-    scorePlayhead.style.display!=='block'||rect.width<2||rect.height<50)
-    throw Error('播放时谱面竖线不可见');
+    // Windows fractional DPI may report a 2 CSS px line as 1.994 px.
+    scorePlayhead.style.display!=='block'||rect.width<1.5||rect.height<50)
+    throw Error(`播放时谱面竖线不可见：${JSON.stringify({playing:player.playing,connected:scorePlayhead.isConnected,
+      display:scorePlayhead.style.display,width:rect.width,height:rect.height,style:scorePlayhead.getAttribute('style')})}`);
   player.pause();player.seek(2);
   if(scoreAnchorIndex===0)throw Error('进度跳转没有移动谱面竖线');
   const seekIndex=scoreAnchorIndex;
   player.stop();
   if(scorePlayhead.style.display!=='none')throw Error('停止后竖线没有隐藏');
+  const oldWidth=$('score').clientWidth;
+  $('score').style.width='70%';
+  await new Promise(resolve=>setTimeout(resolve,450));
+  if($('score').clientWidth>=oldWidth||!scoreAnchors.length)throw Error('缩窄窗口后谱面没有重新排版');
+  const anchor=scoreAnchors[Math.min(2,scoreAnchors.length-1)];
+  paintScoreCursor(anchor.tick*60/(generated.version.bpm*generated.version.ppq));
+  const resized=scorePlayhead.getBoundingClientRect();
+  if(!scorePlayhead.isConnected||Math.abs(resized.left-anchor.page.getBoundingClientRect().left+1-anchor.x)>1.5)
+    throw Error('重新排版后竖线没有对齐音符');
+  $('score').style.width='';
+  await new Promise(resolve=>setTimeout(resolve,450));
   await player.play();
-  return {visible:true,interpolated:true,wrapped:wrap>=0,seekIndex,playing:player.playing,notes:generated.version.notes.length};
+  return {visible:true,interpolated:true,resized:true,wrapped:wrap>=0,seekIndex,playing:player.playing,notes:generated.version.notes.length};
 })()

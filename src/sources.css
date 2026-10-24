@@ -85,3 +85,7 @@ button:disabled { opacity: .55; cursor: wait; }
   .topbar { flex-wrap: wrap; gap: 18px; }
   .midi-sources { width: 100%; max-width: none; margin-left: 0; }
 }
+
+#arrangementFields .control-row{flex-wrap:wrap;gap:14px}#arrangementFields .field{flex:1;min-width:180px}#arrangementFields .control-row:first-child .field:first-child{min-width:280px}#arrangementFields select{max-width:100%}
+
+#leadOptions{flex-wrap:wrap}

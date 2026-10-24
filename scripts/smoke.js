@@ -5,13 +5,16 @@ const data=path.join(runRoot,'data'),exportDir=path.join(runRoot,'exports');
 const sample=path.join(root,'samples','four-instruments.mid');
 if(!fs.existsSync(sample))throw Error('请先运行 pnpm samples 生成示例 MIDI。');
 for(const stage of ['create','reload','delete','deleted','resample','mp3','mp3-reload','playhead']){
+  // Playhead generates a fresh piano-full version; use a separate library so
+  // it cannot recreate the version whose deletion the earlier stages verify.
+  const stageData=stage==='playhead'?path.join(runRoot,'playhead-data'):data;
   const result=spawnSync(electron,['.','--no-sandbox','--disable-gpu','--autoplay-policy=no-user-gesture-required'],{
     cwd:root,encoding:'utf8',timeout:60000,windowsHide:true,
-    env:{...process.env,SCORESPROUT_TEST_DATA:data,SCORESPROUT_TEST_IMPORT:sample,
+    env:{...process.env,SCORESPROUT_TEST_DATA:stageData,SCORESPROUT_TEST_IMPORT:sample,
       SCORESPROUT_TEST_IMPORT_MP3:path.join(root,'samples','440hz-test.mp3'),
       SCORESPROUT_TEST_EXPORT:exportDir,SCORESPROUT_SMOKE_STAGE:stage}
   });
-  const report=path.join(data,`smoke-${stage}.json`);
+  const report=path.join(stageData,`smoke-${stage}.json`);
   if(result.error||!fs.existsSync(report))throw Error(`${stage} 阶段失败：${result.error?.message||result.stderr||result.stdout}`);
 }
 const created=JSON.parse(fs.readFileSync(path.join(data,'smoke-create.json'),'utf8'));
@@ -21,7 +24,7 @@ const afterDelete=JSON.parse(fs.readFileSync(path.join(data,'smoke-deleted.json'
 const mp3=JSON.parse(fs.readFileSync(path.join(data,'smoke-mp3.json'),'utf8'));
 const mp3Reload=JSON.parse(fs.readFileSync(path.join(data,'smoke-mp3-reload.json'),'utf8'));
 const resample=JSON.parse(fs.readFileSync(path.join(data,'smoke-resample.json'),'utf8'));
-const playhead=JSON.parse(fs.readFileSync(path.join(data,'smoke-playhead.json'),'utf8'));
+const playhead=JSON.parse(fs.readFileSync(path.join(runRoot,'playhead-data','smoke-playhead.json'),'utf8'));
 if(resample.tone440<.4||resample.tone15000>resample.tone440*.03)
   throw Error('MP3 降采样没有充分抑制高频混叠。');
 if(created.outcomes.length!==13||created.library!==13||loaded.library!==13||!loaded.svg||!loaded.playbackControls||!loaded.ensemble)

@@ -46,6 +46,7 @@ function allocateVoices(notes, preferLow=false) {
   return voices.map(voice=>voice.groups);
 }
 function voicePieces(groups, measureStart, measureEnd, beatTicks) {
+  if(!groups.length)return [{start:measureStart,duration:measureEnd-measureStart,active:[],measureRest:true}];
   const pieces=[];
   let position=measureStart;
   const append=(start,end,active)=>{
@@ -62,17 +63,20 @@ function voicePieces(groups, measureStart, measureEnd, beatTicks) {
 }
 function notesXML(pieces, staff, voice, instrument, flats, hideRests=false) {
   return pieces.map(piece => {
+    if(piece.measureRest)return '<note'+(hideRests?' print-object="no"':'')+'><rest measure="yes"/><duration>'+piece.duration+'</duration><voice>'+voice+'</voice>'+(staff?'<staff>'+staff+'</staff>':'')+'</note>';
     const timing=`<duration>${piece.duration}</duration><voice>${voice}</voice><type>${piece.type}</type>${piece.dot?'<dot/>':''}`;
     if (!piece.active.length) return `<note${hideRests?' print-object="no"':''}><rest/>${timing}${staff?`<staff>${staff}</staff>`:''}</note>`;
     const unique = [...new Map(piece.active.map(n => [n.pitch,n])).values()].sort((a,b) => a.pitch-b.pitch);
     return unique.map((n, j) => {
       const prev = n.start < piece.start, next = n.start + n.duration > piece.start + piece.duration;
       const tie = `${prev ? '<tie type="stop"/>' : ''}${next ? '<tie type="start"/>' : ''}`;
-      const tied = prev || next ? `<notations>${prev ? '<tied type="stop"/>' : ''}${next ? '<tied type="start"/>' : ''}</notations>` : '';
+      const fingering=!prev&&n.fingering?`<technical><fingering placement="${staff===2?'below':'above'}">${n.fingering}</fingering></technical>`:'';
+      const tied = prev || next || fingering ? `<notations>${prev ? '<tied type="stop"/>' : ''}${next ? '<tied type="start"/>' : ''}${fingering}</notations>` : '';
       const pos = drumPositions[n.pitch] || ['C',5];
       const position = instrument === 'drums' ? `<unpitched><display-step>${pos[0]}</display-step><display-octave>${pos[1]}</display-octave></unpitched>` : pitchXML(n.pitch, flats);
       const head = instrument === 'drums' && [42,44,46,49,51].includes(n.pitch) ? '<notehead parentheses="no">x</notehead>' : '';
-      return `<note>${j ? '<chord/>' : ''}${position}<duration>${piece.duration}</duration>${tie}<voice>${voice}</voice><type>${piece.type}</type>${piece.dot?'<dot/>':''}${head}${staff ? `<staff>${staff}</staff>` : ''}${instrument === 'drums' ? `<instrument id="D${n.pitch}"/>` : ''}${tied}</note>`;
+      const grace=!prev?(n.graceBefore||[]).map(g=>`<note><grace slash="yes"/>${pitchXML(g.pitch,flats)}<voice>${voice}</voice><type>eighth</type>${staff?`<staff>${staff}</staff>`:''}</note>`).join(''):'';
+      return grace+`<note>${j ? '<chord/>' : ''}${position}<duration>${piece.duration}</duration>${tie}<voice>${voice}</voice><type>${piece.type}</type>${piece.dot?'<dot/>':''}${head}${staff ? `<staff>${staff}</staff>` : ''}${instrument === 'drums' ? `<instrument id="D${n.pitch}"/>` : ''}${tied}</note>`;
     }).join('');
   }).join('');
 }

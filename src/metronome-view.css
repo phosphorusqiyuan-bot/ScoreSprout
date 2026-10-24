@@ -1,0 +1,30 @@
+.score-metronome { margin: 8px 0 16px; padding: 10px 14px; background: var(--surface, #fff); border: 1px solid #dce4dd; border-radius: 10px; }
+.score-metronome-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.score-metronome-info { font-size: 13px; font-variant-numeric: tabular-nums; }
+.score-metronome-head label { margin-left: auto; font-size: 12px; }
+.score-metronome-head select { padding: 3px 6px; }
+.score-metronome-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 5px 0 0; color: #58645b; font-size: 12px; }
+.score-metronome-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
+.score-metronome-legend .strong { background: #f86e6e; }
+.score-metronome-legend .secondary { background: #88a7f8; }
+.score-metronome-legend .weak { background: #b3f888; }
+.metronome-calibration { margin-top: 8px; color: #58645b; font-size: 12px; }
+.metronome-calibration summary { cursor: pointer; }
+.metronome-calibration .calibration-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; }
+.metronome-calibration .calibration-fields label { display: inline-flex; align-items: center; gap: 5px; }
+.metronome-calibration input { width: 76px; padding: 5px 7px; border: 1px solid #cbd7ce; border-radius: 5px; }
+.metronome-calibration button { padding: 7px 10px; }
+/* Read-only score follower: retain the upstream beat tiles/ball, hide its
+   independent tempo/settings/transport controls. The score toolbar owns them. */
+#metronomeMount .metronome-tempo,
+#metronomeMount .metronome-controls,
+#metronomeMount .metronome-side,
+#metronomeMount .metronome-stage-head,
+#metronomeMount .metronome-chassis > :not(.metronome-body) { display: none !important; }
+#metronomeMount .metronome-chassis { border: 0; min-height: 0; max-width: 440px; background: transparent; }
+#metronomeMount .metronome-body { padding: 0; display: block; }
+#metronomeMount .metronome-beat-num { -webkit-text-stroke: 0; color: #26322a; font-size: 14px; }
+.score-metronome[data-style="dots"] #metronomeMount .metronome-ball { display: none; }
+.score-metronome[data-style="dots"] #metronomeMount .metronome-beats { height: 48px !important; align-items: center; gap: 16px !important; }
+.score-metronome[data-style="dots"] #metronomeMount .metronome-beat-tile { width: 28px; height: 28px !important; flex: none; border-radius: 50%; border-width: 1px; box-shadow: none; opacity: .6; }
+.score-metronome[data-style="dots"] #metronomeMount .metronome-beat-tile[data-active="true"] { opacity: 1; transform: scale(1.13); box-shadow: 0 0 0 3px #fff, 0 0 0 5px #64796a; }

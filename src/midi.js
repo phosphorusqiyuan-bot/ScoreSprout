@@ -1,5 +1,6 @@
+const {buildLeftHand}=require('./lead-arrangement');
 const { parseMidi, writeMidi } = require('midi-file');
-const { arrangeMp3 } = require('./mp3-arrangement');
+const { arrangeMp3,parseBeats,parseChords } = require('./mp3-arrangement');
 const { inferKey } = require('./key-analysis');
 const { simplifyPianoNotes } = require('./piano-difficulty');
 const { tidyRhythm, estimateScoreTempo } = require('./rhythm');
@@ -178,6 +179,15 @@ function selectNotes(notes, instrument, difficulty, ppq) {
   return result;
 }
 
+function validateArrangementSettings(input) {
+  if(input===undefined)return null;
+  if(!input||typeof input!=='object')throw Error('生成设置无效。');
+  const {mode='vocal'}=input;
+  if(!['legacy','vocal','dual','melody'].includes(mode)||
+    input.leftStyle!==undefined&&!['legacy','root','fifth','voiced','off'].includes(input.leftStyle))
+    throw Error('生成模式或左手设置无效。');
+  return {mode,...(input.leftStyle!==undefined?{leftStyle:input.leftStyle}:{})};
+}
 function generateVersion(source, trackIds, instrument, difficulty, title, manual = false, options = {}) {
   if ((instrument !== 'auto' && !['piano','guitar','bass','drums'].includes(instrument)) || !DIFFICULTIES[difficulty])
     throw new Error('请选择有效的乐器和难度。');
@@ -186,11 +196,12 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
     throw new Error('请至少选择一个有音符的轨道。');
   const tracks = ids.map(id => source.tracks.find(t => t.id === id));
   if (tracks.some(t => !t?.notes.length)) throw new Error('所选轨道没有可用音符，无法生成乐谱。');
+  const settings=source.inputType==='mp3'?validateArrangementSettings(options.settings):null;
   const assignments = {}, groups = new Map();
   let arrangement=null;
   if(source.inputType==='mp3'){
     const target=instrument==='auto'?'piano':instrument;
-    arrangement=arrangeMp3(source,tracks,target,difficulty);
+    arrangement=arrangeMp3(source,tracks,target,difficulty,settings?.mode||'legacy',{omitAccompaniment:settings?.leftStyle&&settings.leftStyle!=='legacy'});
     groups.set(target,[{id:'mp3-arrangement',name:arrangement.trackName,notes:arrangement.notes}]);
   }else for (const track of tracks) {
     let target = track.detected;
@@ -215,6 +226,7 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
   // 62.5 ms at 120 BPM, which audibly changes swung or freely played rhythms.
   const grid = {full:30,intermediate:60,beginner:120}[difficulty];
   const parts = [];
+  let accompanimentProcessing;
   for (const target of ['piano','guitar','bass','drums']) {
     const selected = groups.get(target);
     if (!selected) continue;
@@ -237,8 +249,21 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
       else { previous.duration=Math.max(previous.duration,note.duration); previous.velocity=Math.max(previous.velocity,note.velocity); }
     }
     let notes = [...unique.values()].sort((a,b) => a.start-b.start || a.pitch-b.pitch);
+    if(target==='piano'&&settings?.mode==='vocal'){
+      if(settings.leftStyle&&settings.leftStyle!=='legacy'){
+        const melody=notes.filter(n=>n.hand==='right');
+        const result=buildLeftHand(parseChords(source.audioAnalysis?.chords),melody,{ppq,
+          meter:source.timeSignature,pickupTicks:0,
+          style:settings.leftStyle,difficulty,toTick:seconds=>seconds*ppq*bpm/60});
+        notes=[...melody,...result.notes].sort((a,b)=>a.start-b.start||a.pitch-b.pitch);
+        accompanimentProcessing=result.stats;
+        arrangement.pianoAccompaniment=result.notes.length>0;
+        arrangement.trackName=arrangement.trackName.replace(/（右手）.*/, '（右手）')+(result.notes.length?' + 按拍和弦伴奏（左手）':'');
+        arrangement.provenance='右手来自主唱旋律；'+(result.notes.length?'左手按预测和弦、拍号与旋律留白编配，不是原曲钢琴左手转写。':'当前没有添加左手：已关闭、无可用和弦或无法满足音区约束。');
+      }
+    }
     if(target==='piano' && !options.deferPianoDifficulty)
-      notes=simplifyPianoNotes(notes,difficulty,ppq,source.timeSignature);
+      notes=simplifyPianoNotes(notes,difficulty,ppq,source.timeSignature,rhythmProcessing?.pickupTicks||0,!!accompanimentProcessing);
     if (notes.length) parts.push({ instrument:target,trackIds:arrangement?arrangement.trackIds:selected.map(t=>t.id),
       trackName:selected.map(t=>t.name).join(' + '),notes });
   }
@@ -246,10 +271,12 @@ function generateVersion(source, trackIds, instrument, difficulty, title, manual
   const notes = parts.flatMap(part=>part.notes).sort((a,b)=>a.start-b.start || a.pitch-b.pitch);
   return { title:(title || source.title).trim() || source.title,
     instrument:parts.length === 1 ? parts[0].instrument : 'ensemble',difficulty,
-    trackId:ids[0]||null,trackIds:arrangement?arrangement.trackIds:ids,
+    trackId:arrangement?.trackIds[0]||ids[0]||null,trackIds:arrangement?arrangement.trackIds:ids,
     trackName:arrangement?arrangement.trackName:tracks.map(t=>t.name).join(' + '),
     sourceTrack:tracks[0]?.sourceTrack||null,assignments,bpm,
+    ...(accompanimentProcessing?{accompanimentProcessing}:{}),
     ...(rhythmProcessing?{rhythmProcessing}:{}),
+    ...(settings?{arrangementSettings:settings,pianoRoleLocked:settings.mode!=='legacy'}:{}),
     ...(options.deferPianoDifficulty && difficulty!=='full' && parts.some(part=>part.instrument==='piano')?
       {pianoDifficultyPending:true}:{}),
     ...(arrangement?{provenance:arrangement.provenance,

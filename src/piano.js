@@ -92,7 +92,7 @@ async function enhancePianoVersion(version, inputType) {
   const runtime = findRuntime();
   if (!runtime) {
     applyPianoDifficulty(version);
-    version.pianoProcessing = {handMethod:version.mp3PianoAccompaniment?'mp3-arrangement':'pitch', fingeringCount:0,
+    version.pianoProcessing = {handMethod:version.mp3PianoAccompaniment?'mp3-arrangement':version.pianoRoleLocked?'mp3-roles':'pitch', fingeringCount:0,
       warning:version.mp3PianoAccompaniment?'尚未安装 PianoPlayer，左手自动编配仍可演奏，但暂不显示指法。请双击「安装钢琴分手与指法.cmd」。':
         '尚未安装钢琴分手与指法模型；请双击「安装钢琴分手与指法.cmd」。当前仍按音高分谱。'};
     return {musicxml:versionToMusicXML(version), version};
@@ -103,6 +103,7 @@ async function enhancePianoVersion(version, inputType) {
     fs.writeFileSync(input, JSON.stringify({bpm:version.bpm, ppq:version.ppq, notes:part.notes}), 'utf8');
     let handMethod, handWarning='';
     if(version.mp3PianoAccompaniment)handMethod='mp3-arrangement';
+    else if(version.pianoRoleLocked)handMethod='mp3-roles';
     else {
       try {
         await runPython(runtime.python, ['hands', input, runtime.weights, output]);

@@ -1,0 +1,60 @@
+(async()=>{
+  const check=(v,m)=>{if(!v)throw Error(m);},sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const errors=[];window.addEventListener('error',e=>errors.push(e.message));
+  const offline=await(async()=>{
+    const sampleRate=22050,duration=600,ctx=new OfflineAudioContext(1,duration*sampleRate,sampleRate);
+    const p=new ScorePlayer(()=>{},()=>{});p.load([{pitch:60,start:0,duration:duration*75*480/60}],75,'piano',null,{metronomeSettings:{firstDownbeat:.15}});p.ctx=ctx;
+    for(const beat of p.beats)if(beat.seconds<duration)p.click(beat.seconds,beat.level);
+    const pcm=(await ctx.startRendering()).getChannelData(0),onsets=[];let last=-sampleRate;
+    for(let i=0;i<pcm.length;i++)if(Math.abs(pcm[i])>.001&&i-last>sampleRate*.07){onsets.push(i/sampleRate);last=i;}
+    check(onsets.length===750,'Offline audio contains missing or duplicate clicks: '+onsets.length);
+    const maxRelativeOnsetErrorMs=Math.max(...onsets.map((t,i)=>Math.abs(t-onsets[0]-i*.8)*1000));
+    check(maxRelativeOnsetErrorMs<1,'Offline onset drift exceeds 1 ms');
+    return {durationSeconds:duration,bpm:75,clicks:onsets.length,sampleRate,maxRelativeOnsetErrorMs,firstOnsetDelayMs:(onsets[0]-.15)*1000};
+  })();
+  const items=await window.scoresprout.listLibrary(),item=items[0],data=await window.scoresprout.loadVersion(item.songId,item.id);
+  $('workspace').classList.remove('hidden');$('emptyState').classList.add('hidden');await renderVersion(data);
+  player.load([{pitch:60,start:0,duration:70*75*480/60}],75,'piano',null,{metronomeSettings:{firstDownbeat:.15}});
+  player.preparePiano=async()=>{};player.sound=()=>{};
+  const ctx=await player.context();check(ctx.audioWorklet,'AudioWorklet unavailable');
+  const code=`class ClickRecorder extends AudioWorkletProcessor {
+    constructor(){super();this.last=-1000000;}
+    process(inputs){const data=inputs[0]?.[0];if(data)for(let i=0;i<data.length;i++){
+      const frame=currentFrame+i;if(Math.abs(data[i])>.001&&frame-this.last>sampleRate*.07){this.last=frame;this.port.postMessage(frame/sampleRate);}
+    }return true;}
+  }registerProcessor('click-recorder',ClickRecorder);`;
+  const url=URL.createObjectURL(new Blob([code],{type:'application/javascript'}));
+  await ctx.audioWorklet.addModule(url);URL.revokeObjectURL(url);
+  const recorder=new AudioWorkletNode(ctx,'click-recorder',{outputChannelCount:[1]}),onsets=[],scheduled=[];
+  recorder.port.onmessage=e=>onsets.push(e.data);recorder.connect(ctx.destination);
+  const gainFactory=ctx.createGain.bind(ctx);ctx.createGain=()=>{const node=gainFactory();node.connect(recorder);return node;};
+  const click=player.click.bind(player);player.click=(when,level)=>{scheduled.push({when,level});click(when,level);};
+  const WorkerClass=window.Worker,worker={created:0,messages:0};
+  window.Worker=class extends WorkerClass{constructor(...args){super(...args);worker.created++;this.addEventListener('message',()=>worker.messages++);}};
+  player.setMetronome(true);await player.play();const base=player.base,stalls=[],visualChecks=[];
+  let shortStall=false,longStall=false,reapplied=false;
+  while(player.playbackSeconds()<61){
+    await sleep(100);let time=player.playbackSeconds();
+    let block=0;if(time>8&&!shortStall){shortStall=true;block=1600;}
+    if(time>27&&!longStall){longStall=true;block=2200;}
+    if(block){const start=performance.now();while(performance.now()-start<block){};await sleep(80);
+      const state=player.metronomeState();check(Number($('metronomeMount').dataset.beat)===state.beat+1,'Visual did not recover after stall');stalls.push({blockedMs:block,recoveredAfterMs:80});}
+    if(time>48&&!reapplied){reapplied=true;player.setMetronome(true);player.configureMetronome({...player.metronomeSettings});}
+    const state=player.metronomeState();check(state.bpm===75,'Fixed BPM changed during stress run');
+    if(state.phase>.12&&state.phase<.85){check(Number($('metronomeMount').dataset.beat)===state.beat+1,'Native beat highlight drifted');visualChecks.push(time);}
+  }
+  const cutoff=ctx.currentTime;player.pause();await sleep(200);
+  const expected=scheduled.filter(e=>e.when<cutoff-.06),heard=onsets.filter(t=>t<cutoff-.06);
+  check(heard.length===expected.length,'Real audio missing/duplicate clicks: heard '+heard.length+', expected '+expected.length);
+  const maxOnsetErrorMs=Math.max(...heard.map((t,i)=>Math.abs(t-expected[i].when)*1000));
+  const maxIntervalErrorMs=Math.max(...heard.slice(1).map((t,i)=>Math.abs(t-heard[i]-.8)*1000));
+  check(maxOnsetErrorMs<2&&maxIntervalErrorMs<2,'Real audio timing error exceeds 2 ms');
+  const pausedOnsets=onsets.length;await sleep(250);check(onsets.length===pausedOnsets,'Clicks continue after pause');
+  check(worker.created>0&&worker.messages>100,'Package Worker ticker did not run');
+  await player.play();await Promise.all([player.seek(5),player.seek(12),player.seek(6)]);check(player.playing&&player.playStart===6,'Rapid native seek lost playback');
+  player.stop();check(!player.scheduler&&!player.clicks.size,'Stop leaks timer or clicks');
+  window.Worker=WorkerClass;ctx.createGain=gainFactory;recorder.disconnect();await ctx.close();
+  check(!errors.length,errors.join('\n'));
+  return {offline,realtime:{durationSeconds:61,bpm:75,clicks:heard.length,sampleRate:ctx.sampleRate,maxOnsetErrorMs,maxIntervalErrorMs,
+    mainThreadStalls:stalls,visualChecks:visualChecks.length,worker,pausedSilence:true,rapidSeek:true,timerCleanup:true},errors};
+})()

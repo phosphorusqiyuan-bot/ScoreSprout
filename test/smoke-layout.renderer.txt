@@ -13,7 +13,7 @@
   check(scoreAnchors.length===wanted.size,'缩放后光标起音丢失');
   $('showFingerings').checked=false;redrawScore();
   check(!scoreDisplay.EngravingRules.RenderFingerings,'隐藏指法未生效');
-  check(!scoreDisplay.GraphicSheet.MeasureList.flat().some(m=>m.staffEntries.some(s=>s.FingeringEntries.length)),'隐藏后仍绘制旧指法');
+  check(!scoreDisplay.GraphicSheet.MeasureList.flat().filter(Boolean).some(m=>m.staffEntries.some(s=>s.FingeringEntries.length)),'隐藏后仍绘制旧指法');
   check(JSON.stringify(loaded.version.notes)===notes,'排版改动了试听音符');
   $('showFingerings').checked=true;$('scoreZoom').value='100';redrawScore();
   player.seek(Math.min(1,player.duration/2));
@@ -21,9 +21,10 @@
   const exported=await window.scoresprout.exportVersion(item.songId,item.id,'musicxml');
   check(exported,'排版后的 MusicXML 未导出');
   const report={title:loaded.version.title,notes:loaded.version.notes.length,anchors:scoreAnchors.length,
+    emptyMeasureSlots:scoreDisplay.GraphicSheet.MeasureList.reduce((sum,row)=>sum+row.length-row.filter(Boolean).length,0),
     beams:(loaded.musicxml.match(/<beam\b/g)||[]).length,zoom:true,fingeringToggle:true,exported,beforeWidth,
-    fingeringLabels:scoreDisplay.GraphicSheet.MeasureList.flat().flatMap(m=>m.staffEntries).reduce((sum,s)=>sum+s.FingeringEntries.length,0),
-    fingeringModifiers:scoreDisplay.GraphicSheet.MeasureList.flat().flatMap(m=>m.staffEntries)
+    fingeringLabels:scoreDisplay.GraphicSheet.MeasureList.flat().filter(Boolean).flatMap(m=>m.staffEntries).reduce((sum,s)=>sum+s.FingeringEntries.length,0),
+    fingeringModifiers:scoreDisplay.GraphicSheet.MeasureList.flat().filter(Boolean).flatMap(m=>m.staffEntries)
       .flatMap(s=>s.graphicalVoiceEntries).flatMap(v=>v.vfStaveNote?.getModifiers?.()||[])
       .filter(m=>/stringnumber|frethandfinger/i.test(m.getCategory?.()||'')).length};
   check(report.fingeringModifiers===0,'仍有重复的 VexFlow 指法数字');

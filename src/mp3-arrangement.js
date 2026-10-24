@@ -12,7 +12,7 @@ function parseChords(value) {
       chord.start>=0&&chord.end>chord.start&&chord.end<=601);
 }
 
-function parseBeats(value) {
+function parseBeats(value, {preserveMeters=false}={}) {
   const rows=parseRows(value,4).map(([time,position,numerator,denominator]) => ({
     time:Number(time),position:Number(position),numerator:Number(numerator),denominator:Number(denominator)
   })).filter(beat => Number.isFinite(beat.time)&&beat.time>=0&&beat.time<=600&&
@@ -23,7 +23,7 @@ function parseBeats(value) {
   const counts=new Map();
   for(const beat of rows){const meter=`${beat.numerator}/${beat.denominator}`;counts.set(meter,(counts.get(meter)||0)+1);}
   const meter=[...counts].sort((a,b)=>b[1]-a[1])[0][0];
-  return rows.filter(beat=>`${beat.numerator}/${beat.denominator}`===meter)
+  return rows.filter(beat=>preserveMeters||`${beat.numerator}/${beat.denominator}`===meter)
     .sort((a,b)=>a.time-b.time).filter((beat,index,ordered)=>index===0||beat.time>ordered[index-1].time+.15);
 }
 
@@ -79,7 +79,7 @@ function pianoLeftHand(source,chords,beats,melody,difficulty) {
   return notes;
 }
 
-function arrangeMp3(source,selected,instrument,difficulty='full') {
+function arrangeMp3(source,selected,instrument,difficulty='full',mode='legacy',options={}) {
   const analysis=source.audioAnalysis||{};
   const chords=parseChords(analysis.chords),beats=parseBeats(analysis.beats);
   const s=time=>secondsToTicks(source,time);
@@ -88,8 +88,13 @@ function arrangeMp3(source,selected,instrument,difficulty='full') {
   if(instrument==='piano'){
     if(!selected.length)throw new Error('钢琴谱请先选择人声或器乐旋律。');
     if(selected.length>2)throw new Error('钢琴谱最多选择人声与器乐两条旋律。');
-    const right=selected.find(isVocal)||selected[0];
-    const left=selected.find(track=>track.id!==right.id);
+    if(!['legacy','vocal','dual','melody'].includes(mode))throw Error('钢琴生成模式无效。');
+    const right=mode==='vocal' ? source.tracks.find(track=>track.role==='vocal_melody'||isVocal(track)) :
+      selected.find(track=>track.role==='vocal_melody'||isVocal(track))||selected[0];
+    if(!right?.notes.length)throw Error('未检测到人声旋律。请选择“单旋律练习”或“双旋律改编”。');
+    if(mode==='melody'&&selected.length!==1)throw Error('单旋律练习请选择且只选择一条旋律。');
+    if(mode==='dual'&&selected.length!==2)throw Error('双旋律改编需要选择两条旋律。');
+    const left=['legacy','dual'].includes(mode)?selected.find(track=>track.id!==right.id):null;
     notes.push(...right.notes.map(note=>({...note,hand:'right'})));
     if(left){
       const center=median(left.notes.map(note=>note.pitch));
@@ -98,11 +103,11 @@ function arrangeMp3(source,selected,instrument,difficulty='full') {
       trackName=`${right.name}（右手） + ${left.name}（左手）`;
       provenance='SheetSage2 两条旋律的双手改编；左手器乐旋律可能移八度，并非原曲钢琴伴奏。';
     }else{
-      const accompaniment=pianoLeftHand(source,chords,beats,right.notes,difficulty);
+      const accompaniment=mode==='melody'||options.omitAccompaniment?[]:pianoLeftHand(source,chords,beats,right.notes,difficulty);
       notes.push(...accompaniment);
       pianoAccompaniment=accompaniment.length>0;
       trackName=pianoAccompaniment?`${right.name}（右手） + 和弦伴奏（左手）`:`${right.name}（右手）`;
-      provenance=pianoAccompaniment?
+      provenance=mode==='melody'?'单旋律练习：仅保留所选主旋律，不添加左手伴奏。':pianoAccompaniment?
         '右手为 SheetSage2 提取的旋律；左手按预测和弦与节拍自动编配，不是原曲左手转写。':
         'SheetSage2 未识别到覆盖所选旋律的可用和弦，无法可靠编配左手；当前仅保留右手旋律。';
     }
@@ -151,7 +156,7 @@ function arrangeMp3(source,selected,instrument,difficulty='full') {
     provenance='按 SheetSage2 节拍生成的基础底鼓、军鼓与踩镲；不是原曲鼓点转写。';
   }else throw new Error('MP3 编配乐器无效。');
   return {notes,trackName,provenance,pianoAccompaniment,
-    trackIds:['bass','drums'].includes(instrument)?[]:selected.map(track=>track.id)};
+    trackIds:['bass','drums'].includes(instrument)?[]:mode==='vocal'&&instrument==='piano'?[source.tracks.find(track=>track.role==='vocal_melody'||isVocal(track)).id]:selected.map(track=>track.id)};
 }
 
 module.exports={arrangeMp3,parseChords,parseBeats,chordTones};

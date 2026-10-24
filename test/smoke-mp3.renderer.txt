@@ -1,5 +1,6 @@
 (async()=>{
   await importMp3();
+  $('arrangementMode').value='melody';
   const source=state.source;
   if(!source||source.inputType!=='mp3'||source.tracks.length!==1)throw Error('MP3 import failed');
   const track=source.tracks[0];
