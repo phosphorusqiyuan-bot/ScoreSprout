@@ -32,21 +32,25 @@ test('长音自然衰减，记谱结束前保持可听尾音',()=>{
   assert(stops[0]>5);
 });
 
-test('跳转到长音中间时沿用已衰减的音量，不重新敲击',()=>{
+test('钢琴使用录音采样；跳转到长音中间读取对应偏移，不重新敲击',()=>{
   const window={};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..','src','audio.js'),'utf8'),{window});
-  const gains=[];
+  const gains=[],sources=[];
   const player=new window.ScorePlayer(()=>{},()=>{});
   player.instrument='piano';
-  player.ctx={destination:{},createOscillator:()=>({frequency:{setValueAtTime(){}},connect(){},start(){},stop(){}}),
+  player.pianoBuffers=new Map([[69,{duration:10}]]);
+  player.ctx={destination:{},createOscillator:()=>{throw Error('piano must not use oscillators');},
+    createBufferSource:()=>{const source={playbackRate:{setValueAtTime(){}},connect(){},start(...args){source.started=args;},stop(){}};sources.push(source);return source;},
     createGain:()=>{const events=[];gains.push(events);return {connect(){},gain:{
       setValueAtTime(value,time){events.push({kind:'set',value,time});},
       linearRampToValueAtTime(value,time){events.push({kind:'linear',value,time});},
       exponentialRampToValueAtTime(value,time){events.push({kind:'exponential',value,time});}
     }};}};
   player.sound({pitch:69,velocity:127},0,2,3);
-  assert(gains[0][0].value>0 && gains[0][0].value<.27*.45*.3);
-  assert(gains.every(events=>!events.some(event=>event.kind==='linear')));
+  assert.deepEqual(sources[0].started,[0,3]);
+  assert.equal(gains[0][0].value,.0001);
+  assert(gains[0].some(event=>event.kind==='linear'&&event.time<=.008));
+  assert.equal(player.active.size,1);
 });
 test('播放到曲末后自动停止并通知界面',()=>{
   const window={};

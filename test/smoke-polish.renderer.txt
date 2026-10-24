@@ -33,6 +33,7 @@
   applyTheme('lavender',true);
   const sampleRate=22050,ctx=new OfflineAudioContext(1,sampleRate*5,sampleRate);
   const audio=new ScorePlayer(()=>{},()=>{});audio.ctx=ctx;audio.instrument='piano';
+  await audio.preparePiano([{pitch:69}]);
   audio.sound({pitch:69,velocity:100},0,4);
   const buffer=await ctx.startRendering(),samples=buffer.getChannelData(0);
   const rms=(start,end)=>{
@@ -40,7 +41,7 @@
     return Math.sqrt(segment.reduce((sum,value)=>sum+value*value,0)/segment.length);
   };
   const early=rms(.2,.4),late=rms(3.2,3.4);
-  check(late>early*.05&&late<early*.4,'实际合成声音未自然衰减或衰减过快');
+  check(late>early*.01&&late<early*.8,'实际钢琴采样未自然衰减或衰减过快');
   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   return {generated:true,regenerated:true,inlineError:true,voices:true,colors,decayRatio:late/early,library:state.library.length};
 })()

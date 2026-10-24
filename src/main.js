@@ -11,6 +11,7 @@ const { enhancePianoVersion, renameMusicXML } = require('./piano');
 const { parseBeats } = require('./mp3-arrangement');
 const { layoutMusicXML } = require('./score-layout');
 const { exportScorePDF } = require('./pdf-export');
+const { readableScore } = require('./score-readability');
 const midiSourceUrls = new Set(['https://www.midishow.com/', 'https://bitmidi.com/', 'https://freemidi.org/', 'https://www.vgmusic.com/']);
 const TRANSCRIPTION_REVISION='sheetsage2-arrangements-v1';
 
@@ -40,7 +41,8 @@ function markMp3Source(source) {
   }
   for(const track of source.tracks){
     track.detected='piano';
-    const vocal=/vocal/i.test(track.name);
+    const vocal=/vocal|人声/i.test(track.name);
+    track.role=vocal?'vocal_melody':/\bins\b|instrumental/i.test(track.name)?'instrumental_melody':'unknown';
     track.name=vocal?'人声旋律':/\bins\b|instrumental/i.test(track.name)?'器乐旋律':track.name;
     track.instrumentName='转写旋律（钢琴试听）';
   }
@@ -182,18 +184,21 @@ app.whenReady().then(() => {
     if (!track) throw new Error('轨道不存在。');
     return { bpm:source.audioBaseBpm||source.bpm, instrument:track.detected, notes:track.notes.map(n=>({ ...n,start:n.start*480/source.sourcePpq,duration:n.duration*480/source.sourcePpq })).slice(0,1500) };
   }));
-  ipcMain.handle('generate-version', wrap(async (id,trackIds,choice,difficultyOrTitle,titleOrAssignments,manual) => {
-    const {manifest,source} = ensureSource(id);
+  ipcMain.handle('generate-version', wrap(async (id,trackIds,choice,difficultyOrTitle,titleOrAssignments,manual,settings) => {
+    const {source} = ensureSource(id);
+    let manifest;
     const multiple = Array.isArray(trackIds);
     const instrument = multiple ? (source.inputType==='mp3' ? manual||'piano' : 'auto') : choice;
     const difficulty = multiple ? choice : difficultyOrTitle;
     const title = multiple ? difficultyOrTitle : titleOrAssignments;
     const assignments = multiple ? titleOrAssignments || {} : manual;
-    const version = generateVersion(source,trackIds,instrument,difficulty,title,assignments,{deferPianoDifficulty:true});
+    const version = generateVersion(source,trackIds,instrument,difficulty,title,assignments,{deferPianoDifficulty:true,settings});
     const {musicxml} = await enhancePianoVersion(version,source.inputType);
+    manifest=readManifest(id);
     manifest.title = version.title;
-    const key = version.trackIds.length === 1 ? `${version.trackId}|${version.instrument}|${difficulty}` :
+    let key = version.trackIds.length === 1 ? `${version.trackId}|${version.instrument}|${difficulty}` :
       `${version.instrument}|${version.trackIds.slice().sort().join('|')}|${Object.entries(version.assignments).sort().map(([id,value])=>`${id}:${value}`).join('|')}|${difficulty}`;
+    if(version.arrangementSettings)key+='|lead-piano-v2|'+JSON.stringify(version.arrangementSettings);
     const variantId = `${version.instrument}-${difficulty}-${crypto.createHash('sha256').update(key).digest('hex').slice(0,12)}`;
     const dir = path.join(songDir(id),'variants'); fs.mkdirSync(dir,{recursive:true});
     writeJSON(path.join(dir,`${variantId}.json`),version);
@@ -201,16 +206,21 @@ app.whenReady().then(() => {
     fs.writeFileSync(path.join(dir,`${variantId}.mid`),versionToMidi(version));
     const entry = { id:variantId, songId:id, title:version.title, instrument:version.instrument, difficulty,
       trackId:version.trackId,trackIds:version.trackIds,assignments:version.assignments,
+      ...(version.arrangementSettings?{arrangementSettings:version.arrangementSettings}:{}),
       trackName:version.trackName, noteCount:version.notes.length, generatedAt:new Date().toISOString() };
     manifest.variants = manifest.variants.filter(v=>v.id!==variantId).concat(entry);
     writeJSON(manifestPath(id),manifest);
-    return { ...entry, version, musicxml:fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8') };
+    const savedXML=fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8');
+    return { ...entry, version, musicxml:savedXML,readable:readableScore(version,savedXML) };
   }));
   ipcMain.handle('list-library', wrap(() => {
     const items=[];
     for (const item of fs.readdirSync(libraryRoot,{withFileTypes:true})) {
       if (!item.isDirectory() || !/^[a-f0-9]{24}$/.test(item.name)) continue;
-      try { const m=readManifest(item.name); for (const v of m.variants) items.push({ ...v,title:m.title }); }
+      try { const m=readManifest(item.name);
+        if(!m.variants.length)items.push({id:'source-'+item.name,songId:item.name,title:m.title,
+          sourceOnly:true,instrument:'piano',difficulty:'beginner',trackName:'原始文件已保留',generatedAt:m.createdAt});
+        for (const v of m.variants) items.push({ ...v,title:m.title }); }
       catch { /* damaged entry does not hide the rest of the library */ }
     }
     return items.sort((a,b)=>b.generatedAt.localeCompare(a.generatedAt));
@@ -219,8 +229,9 @@ app.whenReady().then(() => {
     const m=readManifest(songId);
     if (!/^(?:[a-f0-9]{16}|(?:piano|guitar|bass|drums|ensemble)-(?:beginner|intermediate|full)-[a-f0-9]{12})$/.test(variantId) || !m.variants.some(v=>v.id===variantId)) throw new Error('版本不存在。');
     const dir=path.join(songDir(songId),'variants');
-    return { entry:m.variants.find(v=>v.id===variantId),version:JSON.parse(fs.readFileSync(path.join(dir,`${variantId}.json`),'utf8')),
-      musicxml:layoutMusicXML(fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8')) };
+    const version=JSON.parse(fs.readFileSync(path.join(dir,`${variantId}.json`),'utf8'));
+    const musicxml=layoutMusicXML(fs.readFileSync(path.join(dir,`${variantId}.musicxml`),'utf8'));
+    return { entry:m.variants.find(v=>v.id===variantId),version,musicxml,readable:readableScore(version,musicxml) };
   }));
   ipcMain.handle('delete-version', wrap((songId,variantId) => deleteVersion(libraryRoot,songId,variantId)));
   ipcMain.handle('export-version', wrap(async (songId,variantId,format,options={}) => {
@@ -234,22 +245,27 @@ app.whenReady().then(() => {
     if (chosen.canceled || !chosen.filePath) return null;
     if (process.env.SCORESPROUT_TEST_EXPORT) fs.mkdirSync(process.env.SCORESPROUT_TEST_EXPORT,{recursive:true});
     const sourceFile=path.join(songDir(songId),'variants',`${variantId}.${format==='pdf'?'musicxml':ext}`);
-    if(format==='pdf') {
+    let presentation;
+    if(format!=='mid'){
       const version=JSON.parse(fs.readFileSync(path.join(songDir(songId),'variants',`${variantId}.json`),'utf8'));
-      const report=await exportScorePDF(BrowserWindow,{version:{...version,title:m.title},
-        musicxml:layoutMusicXML(fs.readFileSync(sourceFile,'utf8')),showFingerings:options?.showFingerings!==false,
+      const musicxml=layoutMusicXML(fs.readFileSync(sourceFile,'utf8'));
+      presentation=readableScore(version,musicxml);
+    }
+    if(format==='pdf') {
+      const report=await exportScorePDF(BrowserWindow,{version:{...presentation.version,title:m.title},
+        musicxml:presentation.musicxml,showFingerings:options?.showFingerings!==false,
         zoom:[85,100,115,130].includes(options?.zoom)?options.zoom:100},chosen.filePath);
       if(process.env.SCORESPROUT_SMOKE_STAGE==='pdf')writeJSON(path.join(process.env.SCORESPROUT_TEST_DATA,'pdf-render.json'),report);
       return chosen.filePath;
     }
-    if(format==='musicxml')fs.writeFileSync(chosen.filePath,layoutMusicXML(fs.readFileSync(sourceFile,'utf8')),'utf8');
+    if(format==='musicxml')fs.writeFileSync(chosen.filePath,presentation.musicxml,'utf8');
     else fs.copyFileSync(sourceFile,chosen.filePath);
     return chosen.filePath;
   }));
 
   const win=new BrowserWindow({width:1450,height:930,minWidth:1050,minHeight:700,show:!process.env.SCORESPROUT_SMOKE_STAGE,backgroundColor:'#f7f7f2',
     webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,
-      offscreen:['rhythm-case','layout'].includes(process.env.SCORESPROUT_SMOKE_STAGE)} });
+      offscreen:['rhythm-case','layout','lead-mode','practice','metronome','stability'].includes(process.env.SCORESPROUT_SMOKE_STAGE)} });
   win.webContents.setWindowOpenHandler(({url}) => {
     if (midiSourceUrls.has(url)) shell.openExternal(url);
     return { action:'deny' };
@@ -259,15 +275,34 @@ app.whenReady().then(() => {
   if (process.env.SCORESPROUT_SMOKE_STAGE) win.webContents.once('did-finish-load',async()=>{
     try {
       const stage=process.env.SCORESPROUT_SMOKE_STAGE;
-      if(stage.startsWith('polish'))win.webContents.backgroundThrottling=false;
+      if(stage.startsWith('polish')||stage==='metronome'||stage==='stability')win.webContents.backgroundThrottling=false;
       if(stage==='playhead')win.showInactive();
       const script=fs.readFileSync(path.join(__dirname,'..','test',`smoke-${stage}.renderer.txt`),'utf8');
       const result=await win.webContents.executeJavaScript(script,true);
+      if(stage==='metronome'){
+        for(const style of ['columns','dots']){
+          await win.webContents.executeJavaScript(`document.querySelector('#metronomeStyle').value='${style}';document.querySelector('#metronomeStyle').dispatchEvent(new Event('change'));`);
+          await new Promise(resolve=>setTimeout(resolve,200));
+          fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,`metronome-${style}.png`),(await win.webContents.capturePage()).toPNG());
+        }
+        await win.webContents.executeJavaScript("document.querySelector('.metronome-calibration').open=true;");
+        await new Promise(resolve=>setTimeout(resolve,200));
+        fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'metronome-calibration.png'),(await win.webContents.capturePage()).toPNG());
+      }
+      if(stage==='practice'){
+        fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'piano-demo.wav'),Buffer.from(result.wavBase64,'base64'));delete result.wavBase64;
+        fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-practice.png'),(await win.webContents.capturePage()).toPNG());
+      }
       const out=path.join(process.env.SCORESPROUT_TEST_DATA,`smoke-${stage}.json`);writeJSON(out,result);
       if(stage==='reload') { await win.webContents.executeJavaScript("document.body.innerHTML=document.querySelector('#score svg').outerHTML;document.body.style.background='white'",true); win.showInactive(); await new Promise(resolve=>setTimeout(resolve,500)); fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-reload.png'),(await win.webContents.capturePage()).toPNG()); }
       if(stage==='playhead') { await new Promise(resolve=>setTimeout(resolve,300)); fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-playhead.png'),(await win.webContents.capturePage()).toPNG()); }
-      if(stage==='polish') {
-        fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-polish.png'),(await win.webContents.capturePage()).toPNG());
+      if(stage==='polish'||stage==='lead-mode') {
+        fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-'+stage+'.png'),(await win.webContents.capturePage()).toPNG());
+      }
+      if(stage==='lead-mode') {
+        await win.webContents.executeJavaScript("document.querySelector('#result').scrollIntoView({block:'start'});",true);
+        await new Promise(resolve=>setTimeout(resolve,200));
+        fs.writeFileSync(path.join(process.env.SCORESPROUT_TEST_DATA,'smoke-'+stage+'-score.png'),(await win.webContents.capturePage()).toPNG());
       }
       if(stage==='rhythm-case') {
         await new Promise(resolve=>setTimeout(resolve,300));

@@ -23,3 +23,10 @@ function createScoreDisplay(target,version,options={}) {
   });
   return osmd;
 }
+
+// OSMD may draw print-object="no" tempo directions; omit them from visual
+// rendering only. Playback and exported MusicXML retain the complete map.
+function scoreDisplayXML(xml) {
+  return xml.replace(/<per-minute>([0-9.]+)<\/per-minute>/g,(_,value)=>'<per-minute>'+(Math.round(Number(value)*100)/100)+'</per-minute>')
+    .replace(/<direction\b[^>]*print-object="no"[^>]*>[\s\S]*?<\/direction>/g,'');
+}

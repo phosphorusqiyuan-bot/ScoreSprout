@@ -6,6 +6,19 @@
 
 ScoreSprout 是一款优先面向 Windows 的本地乐谱桌面软件。导入 `.mid` / `.midi` 后，可选择一条或多条真实存在的轨道及难度，查看五线谱、试听生成版本，并在本机音乐库保存或导出 MusicXML / MIDI / PDF。同乐器轨道合并为一个声部；不同乐器轨道生成合奏谱。钢琴谱可使用 PM2S 分配左右手，再用 PianoPlayer 添加指法。MP3 使用 SheetSage2 提取人声旋律、器乐旋律、和弦与节拍：单旋律可按预测和弦自动编配左手，两条旋律可分别分配到左右手，也可生成吉他、贝斯、鼓练习编配。
 
+### 0.2.0 本地优化版
+
+本版围绕“把小众歌曲快速整理成可练习钢琴谱”完善了从转写、编配到试听验收的流程。主要变化如下；完整记录见 [`CHANGELOG.md`](CHANGELOG.md)。
+
+- MP3 钢琴编配增加主唱钢琴版、双旋律改编和单旋律练习模式。主唱模式可选简单根音、根音与五度、平稳和弦或关闭左手，并避免在主唱长休止、未知和弦及双手冲突处强行填音。
+- 全曲使用识别出的单一基准 BPM 播放和计拍；旧版本中的变速映射不再驱动谱面或节拍器。可校准首个完整小节的第一拍。
+- 增加与谱面播放共用时钟的节拍器声音和可视拍点，区分强拍、次强拍和弱拍；暂停、拖动与单独试听右手时仍使用同一位置基准。
+- 钢琴试听改用本地 Salamander Grand Piano 录音采样，覆盖 A0–C8；新增“单独听右手旋律”，便于检查人声主旋律。
+- 谱面默认应用易读整理，不再提供原始/易读开关。它会整理轻微的时值偏差和短空隙，将符合条件的孤立短经过音写成装饰音，并清除旧自动伴奏的极短碎片；真正的快速音、重复起音和有意义的休止仍会保留。试听和 MIDI 保留生成音符的节奏，PDF 与 MusicXML 使用整理后的谱面。
+- 改善多声部、附点音符、跨小节连音、弱起、复合拍连梁、指法和播放光标；已导入但尚未生成乐谱的源文件也会显示在音乐库中。
+
+第三方组件与录音采样的许可证见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+
 ## 安装与启动
 
 需要 Windows 10/11、Node.js 22 或更新版本，以及 pnpm 11。MIDI 功能仅需安装 Node 依赖。MP3 功能还需**单独双击 [`安装 SheetSage2.cmd`](安装%20SheetSage2.cmd)**：脚本在项目的 `.sheetsage2-runtime/` 内安装 Python 3.11、CUDA 版 PyTorch 和模型。首次下载约数 GB，建议预留至少 15 GB 磁盘空间；完成后可离线转写。脚本不会把 MP3 上传至模型服务。无需另外安装系统 Python 或 FFmpeg；没有 NVIDIA 显卡时会尝试 CPU，但会慢得多。
@@ -33,11 +46,11 @@ corepack pnpm start
 1. 点击「导入 MIDI 文件」，或先完成模型安装后点击「MP3 提取旋律（SheetSage2）」。文件会复制到本地音乐库，原文件不会被修改。MP3 导入完成后可直接点击「导出转写 MIDI」。
 2. 查看速度、拍号、调号和轨道列表，修改歌曲名。已有 MIDI 调号优先使用文件值；没有调号时会从非打击乐音符的音高和时长推断，界面标明「音符推断」。MIDI 可勾选多条有音符的轨道、试听并手动指定未识别的乐器。MP3 会显示有音符的人声、器乐旋律轨道；分别试听后可勾选一条或两条，并在「生成乐器」中选择钢琴、吉他、贝斯或鼓。轨道预览统一使用钢琴音色。
 3. 选择「新手版」「进阶版」或「完整版」，点击「生成乐谱」。选择的 MIDI 钢琴轨道会先合并成一组音符，再由 PM2S 预测左右手，PianoPlayer 给 MusicXML 标注指法；太短的曲目使用音高回退。MP3 只选一条旋律时，右手保留该旋律，左手按预测和弦及节拍编配：新手版以单根音为主，进阶版加入双音，完整版加入三和弦。选两条旋律时仍分别放入左右手。若缺少覆盖旋律的可用和弦，会明确提示并只生成右手。吉他使用所选旋律与预测和弦，贝斯使用预测和弦根音，鼓使用预测节拍。结果区会标明这些是练习编配，不是原曲真实分轨。MIDI 已识别的乐器轨道不能冒充另一种乐器。
-4. 在结果区域播放、暂停、停止或拖动进度。播放时谱面上的竖线按播放时间在音符之间平滑移动，并对齐符头；换行时切换到下一行，拖动进度后也会跳到对应位置。钢琴、吉他和贝斯长音会持续衰减，拖动到长音中途时沿用已衰减的音量。延音踏板保持的音会延长到踏板释放或同音再次触发；MusicXML 谱面、试听和导出 MIDI 都由同一份生成音符数据产生。
+4. 在结果区域播放、暂停、停止或拖动进度，也可单独听右手旋律。钢琴使用随项目分发的 Salamander Grand Piano 录音采样。播放时谱面上的竖线按播放时间在音符之间平滑移动，并对齐符头；换行时切换到下一行，拖动进度后也会跳到对应位置。需要核对节奏时，可打开节拍器声音和可视拍点；节拍器使用当前拍号和固定基准 BPM，并可校准第一强拍。延音踏板保持的音会延长到踏板释放或同音再次触发。
 5. 从左侧本地音乐库重开版本，或按歌曲、乐器、难度筛选。每个版本旁的「重新生成」会沿用原始 MIDI、轨道、乐器和难度，用最新规则更新此版本；MP3 使用已保存的转写 MIDI，不重复运行转写模型。选择另一难度并生成会保存为另一版本；同一歌曲的不同乐器使用独立的内部标识。
 6. 点击音乐库条目旁的「删除」或结果区的「删除乐谱」，确认后移除此版本。原始 MIDI、其他版本和已导出的文件会保留；当前打开的版本被删除时，播放会停止，仍可重新生成。
 
-谱面按拍子自动连梁（六八拍按三个八分音符分组），弱起小节保留正确的拍子位置。指法放在各手谱表外侧，避免重复绘制；辅助声部被其他长音覆盖的休止符会隐藏。结果区提供「谱面大小」和「显示指法」，窗口大小变化后会重新排版并定位播放光标。旧谱重新打开即可应用排版优化，无需重新转写或生成；MusicXML 导出同样包含连梁和指法位置，音符与试听节奏不变。
+谱面默认执行易读整理并按拍子自动连梁（六八拍按三个八分音符分组），弱起小节保留正确的拍子位置。整理只改变记谱呈现：轻微偏离网格的音头、短收尾和短空隙会被收整，符合严格条件的孤立短经过音可显示为装饰音；连续快音、重复起音和明确休止不会被隐藏。指法放在各手谱表外侧，避免重复绘制；辅助声部被其他长音覆盖的休止符会隐藏。结果区提供「谱面大小」和「显示指法」，窗口大小变化后会重新排版并定位播放光标。旧谱重新打开即可应用排版优化，无需重新转写或生成；PDF 与 MusicXML 默认导出优化谱面，试听和 MIDI 仍使用生成时保存的音符数据。
 
 点击结果区的「导出 PDF」，选择保存位置，即可导出 A4 竖版乐谱。PDF 使用当前的谱面大小和指法显示设置，按纸张宽度重新排版并自动分页，保持每组左右手谱表完整，包含歌曲名、难度、乐器与页码。导出使用 Electron 内置打印引擎，本地完成，无需安装 MuseScore、PDF 打印机或联网；当前试听和播放光标不会受影响。旧音乐库中的版本也可以直接导出。
 
@@ -77,7 +90,7 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 - [midi-file](https://github.com/carter-thaxton/midi-file)：读写标准 MIDI 事件；按轨道、通道与 Program Change 拆分音符。
 - 调性分析参考 [music21 的 Krumhansl-Schmuckler 音高分布算法](https://music21.org/music21docs/moduleReference/moduleAnalysisDiscrete.html)：在应用内用 JavaScript 按音符时长统计并比较大小调轮廓，MIDI 用户无需安装 Python。
 - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay)：把生成的 MusicXML 在应用内渲染为五线谱。
-- Web Audio API：本地合成钢琴、拨弦吉他、贝斯与鼓音色，按生成音符调度播放。
+- Web Audio API：钢琴使用本地 Salamander Grand Piano 录音采样；吉他、贝斯、鼓和节拍器由本地轻量音源播放，全部按生成音符调度。
 - Chromium 解码 MP3；[SheetSage2](https://huggingface.co/m-a-p/SheetSage2) 与其 [MERT-v2-FullSong](https://huggingface.co/m-a-p/MERT-v2-FullSong) 编码器在本机提取人声和器乐旋律。模型权重采用 CC BY-NC 4.0，仅适合符合该许可的非商业用途；模型代码由 Hugging Face 在本地执行，安装时应信任官方仓库。音频不会上传。
 - [PM2S](https://github.com/cheriell/PM2S) 的手部分配网络及官方权重用于钢琴音符的左右手预测；改编的模型结构代码按 MIT 许可保留在 `scripts/pm2s_hand_model.py`，权重来自 Zenodo，采用 CC BY 4.0。只使用分手模型，不使用它的节奏重写。[PianoPlayer](https://github.com/marcomusy/pianoplayer)（MIT）只在分手后的 MusicXML 上标注指法；输出须通过音符一致性检查才会保存。
 
@@ -108,6 +121,19 @@ node scripts/smoke-sheetsage2.js   # 完成模型安装后，运行真实 SheetS
 ## English
 
 ScoreSprout is a local desktop app, built with Windows in mind, that turns MIDI tracks into sheet music at a level you can play. Import a `.mid` or `.midi` file, choose one or more tracks and a difficulty, then read and play the generated score. Tracks of the same instrument merge into one part; tracks of different instruments form an ensemble score. Piano scores can use PM2S for hand assignment and PianoPlayer for fingering. MP3 transcription uses SheetSage2 to predict vocal and instrumental melodies, chords, and beats. A single melody can receive an automatically arranged left hand from predicted chords; two melodies can be split across the grand staff. Guitar, bass, and drum practice arrangements are also available.
+
+### 0.2.0 local enhancement release
+
+This release focuses on turning uncommon songs into practice-ready piano scores whose melody and timing can be checked inside the app. Full details are in [`CHANGELOG.md`](CHANGELOG.md).
+
+- MP3 piano output now offers vocal piano, dual-melody, and melody-only modes. Vocal piano can use root notes, alternating root/fifth notes, voice-led chords, or no generated left hand.
+- A score uses one detected baseline BPM. Saved tempo maps no longer vary score playback or the metronome; the first full-measure downbeat can be calibrated.
+- An audible and visual metronome follows the score transport and distinguishes strong, secondary, and weak beats. A right-hand-only listening mode helps verify the vocal melody.
+- Piano playback uses bundled Salamander Grand Piano recordings covering A0–C8.
+- Readability cleanup is always applied to the displayed score and PDF/MusicXML exports. It cleans small timing offsets and articulation gaps, writes narrowly qualified approach notes as grace notes, and removes legacy generated accompaniment fragments while preserving real fast passages and rests. Playback and MIDI retain the generated performance notes.
+- Polyphonic notation, dotted values, ties, pickups, compound-meter beaming, fingering placement, and playhead alignment are more robust.
+
+Third-party component and recording notices are collected in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 ### Install and run
 
@@ -201,7 +227,7 @@ We did not find a mature drop-in project that takes only a melody and is fully a
 - Some recorded or converted MIDI files declare a BPM that differs from their actual note grid. For sufficiently long, stable passages with strong evidence, ScoreSprout estimates the notation BPM and rescales ticks by the same ratio, preserving wall-clock playback speed. The result shows both tempos. A short opening measure can preserve leading silence while aligning later barlines. Existing regular grids, explicit tempo changes, and uncertain cases retain the file tempo. Complex rubato may still require manual editing.
 - Rhythm cleanup detects a stable onset grid before adjusting nearby attacks and short note-ending offsets or gaps of up to about 100 ms. Irregular passages retain fine timing. Piano uses sixty-fourth-note minimum timing precision; other instruments retain difficulty-specific grids. Dotted notes and independent voices keep held notes intact instead of slicing them at every other note's boundary. Genuine short notes remain short. Tuplets, swing, pedal markings, expression, and fine velocity details are not fully represented. Sustain pedal events extend note lengths, but pedal symbols are not shown. Cleanup can still cause small timing differences.
 - Simplification is deterministic and may need manual musical editing. Guitar uses a treble staff, without tablature or fingering. Drum notation maps common kit sounds; unusual percussion may use a generic position.
-- Playback uses lightweight synthesized sounds rather than a high-quality SoundFont. The notes match the score, but the timbre differs from a professional instrument library.
+- Piano playback uses locally bundled Salamander Grand Piano recordings; guitar, bass, drums, and the metronome use lightweight local sounds. This remains a compact practice player rather than a full multi-velocity professional instrument library.
 - PDF supports automatic A4 pagination; complex polyphony may still need manual engraving. Paper size and margin controls are not included. A packaged installer is not included. Export MusicXML to MuseScore or another notation editor for further editing.
 - Only standard PPQ MIDI is supported. SMPTE timing is not supported, and very long or complex files may need manual cleanup.
 - SheetSage2's vocal and instrumental outputs are melody candidates, not separated stems or full accompaniment. With two MP3 melodies, the second is shifted into the left-hand range, sometimes by an octave. With one melody, the left hand is **automatically arranged** from predicted chords and beats. Neither output is a transcription of the recording's original left hand. Without usable chords, the single melody remains right-hand only. PM2S assigns existing MIDI piano notes to hands; it does not rewrite the hands of the generated MP3 accompaniment. Hand crossings and complex chords can be misclassified, so short or imbalanced passages may fall back. PianoPlayer's fingering is a suggestion and may omit some chord or tied notes.

@@ -1,6 +1,10 @@
 packages:
   - .
 allowBuilds:
+  esbuild: false
   core-js: false
   electron: true
   gl: false
+
+# Launching/tests must not reinstall the desktop runtime implicitly.
+verifyDepsBeforeRun: false

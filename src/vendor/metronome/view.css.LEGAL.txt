@@ -1,0 +1,4 @@
+Bundled license information:
+
+@pepperhorn/react-music-tools/dist/styles.css:
+  /*! @pepperhorn/react-music-tools v0.1.0 — precompiled styles. Utilities generated with Tailwind CSS (MIT License, https://tailwindcss.com), scoped to .crf-music-tools. */

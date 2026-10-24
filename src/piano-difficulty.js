@@ -24,7 +24,7 @@ function leftPitch(pitch,previous,difficulty) {
     (Math.abs(b-(previous??pitch))+.15*Math.abs(b-pitch)))[0];
 }
 
-function simplifyPianoNotes(notes,difficulty,ppq=480,timeSignature=[4,4]) {
+function simplifyPianoNotes(notes,difficulty,ppq=480,timeSignature=[4,4],pickupTicks=0,preserveLeftRegister=false) {
   if(difficulty==='full')return notes;
   const byHand={right:[],left:[]};
   for(const note of notes)byHand[note.hand||(note.pitch<60?'left':'right')].push(note);
@@ -41,7 +41,7 @@ function simplifyPianoNotes(notes,difficulty,ppq=480,timeSignature=[4,4]) {
   const spacing=difficulty==='beginner' ? (numerator<=3?barTicks:barTicks/2) : beatTicks;
   const slots=new Map();
   for(const group of onsetGroups(byHand.left)) {
-    const slot=Math.floor(group.start/spacing);
+    const slot=Math.floor((group.start-pickupTicks)/spacing);
     if(!slots.has(slot))slots.set(slot,[]);
     slots.get(slot).push(group);
   }
@@ -53,15 +53,15 @@ function simplifyPianoNotes(notes,difficulty,ppq=480,timeSignature=[4,4]) {
     if(difficulty==='beginner') {
       // Small human timing offsets should not create an extra independent
       // left-hand attack. Prefer a nearby melody attack, then a nearby beat.
-      const melodyStart=right.filter(note=>Math.floor(note.start/spacing)===slot && Math.abs(note.start-start)<=ppq/4)
+      const melodyStart=right.filter(note=>Math.floor((note.start-pickupTicks)/spacing)===slot && Math.abs(note.start-start)<=ppq/4)
         .sort((a,b)=>Math.abs(a.start-start)-Math.abs(b.start-start))[0]?.start;
-      const beatStart=Math.round(start/beatTicks)*beatTicks;
+      const beatStart=Math.round((start-pickupTicks)/beatTicks)*beatTicks+pickupTicks;
       if(melodyStart!==undefined)start=melodyStart;
-      else if(Math.floor(beatStart/spacing)===slot && Math.abs(beatStart-start)<=ppq/4)start=beatStart;
+      else if(beatStart>=0&&Math.floor((beatStart-pickupTicks)/spacing)===slot && Math.abs(beatStart-start)<=ppq/4)start=beatStart;
     }
     const end=Math.max(bottom.start+bottom.duration,
-      Math.min((slot+1)*spacing,Math.max(...groups.flatMap(group=>group.notes.map(note=>note.start+note.duration)))));
-    const pitch=leftPitch(bottom.pitch,previousPitch,difficulty);
+      Math.min((slot+1)*spacing+pickupTicks,Math.max(...groups.flatMap(group=>group.notes.map(note=>note.start+note.duration)))));
+    const pitch=preserveLeftRegister?bottom.pitch:leftPitch(bottom.pitch,previousPitch,difficulty);
     const previous=left.at(-1);
     if(difficulty==='beginner' && previous?.pitch===pitch && start-previous.start-previous.duration<=ppq/4) {
       previous.duration=Math.max(previous.duration,end-previous.start);
@@ -80,7 +80,7 @@ function simplifyPianoNotes(notes,difficulty,ppq=480,timeSignature=[4,4]) {
 function applyPianoDifficulty(version) {
   if(!version.pianoDifficultyPending)return;
   for(const part of version.parts)if(part.instrument==='piano')
-    part.notes=simplifyPianoNotes(part.notes,version.difficulty,version.ppq,version.timeSignature);
+    part.notes=simplifyPianoNotes(part.notes,version.difficulty,version.ppq,version.timeSignature,version.rhythmProcessing?.pickupTicks||0,!!version.accompanimentProcessing);
   version.notes=version.parts.flatMap(part=>part.notes).sort((a,b)=>a.start-b.start||a.pitch-b.pitch);
   delete version.pianoDifficultyPending;
 }

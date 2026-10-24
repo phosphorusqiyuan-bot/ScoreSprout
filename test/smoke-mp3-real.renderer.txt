@@ -1,5 +1,6 @@
 (async()=>{
   await importMp3();
+  $('arrangementMode').value='melody';
   const source=state.source;
   if(!source||source.inputType!=='mp3')throw Error('SheetSage2 MP3 import failed');
   const track=source.tracks.find(t=>t.name==='器乐旋律');

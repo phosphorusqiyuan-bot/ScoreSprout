@@ -5,14 +5,40 @@ const instruments = ['piano','guitar','bass','drums'];
 const state = { source:null, trackIds:[], assignments:{}, mp3Instrument:'piano', difficulty:'beginner', entry:null, library:[], previewingTrackId:null, pendingDelete:null, deleting:false, generating:false, regenerating:null };
 const formatTime = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 let scorePlayhead=null,scoreAnchors=[],scoreAnchorIndex=-1,scoreFrame=0,scorePpq=480,scoreBpm=120;
-let scoreDisplay=null,displayedVersion=null,scoreResizeTimer=0;
+let scoreDisplay=null,displayedVersion=null,scoreResizeTimer=0,scoreData=null,notationVersion=null,scoreViewGeneration=0;
+let playbackMode='score',metronomeView=null,metronomeStorageKey='';
+function scoreTransport(){return playbackMode==='right'?previewPlayer:player;}
+function updateMetronomeView(){
+  $('scoreMetronome').classList.toggle('hidden',!$('visualMetronome').checked||playbackMode==='track');
+  metronomeView?.update();
+}
+function setPlaybackMode(mode){
+  playbackMode=mode;
+  $('listenRightBtn').textContent=mode==='right'?'返回全谱试听':'单独听右手旋律';
+  updateMetronomeView();
+}
+function fillMetronomeSettings(){
+  const settings=player.metronomeSettings;
+  $('metronomeBpm').value=Number(settings.bpm.toFixed(3));
+  $('metronomeUnit').textContent=player.metronomeState()?.unitLabel||'♩';
+  $('metronomeDownbeat').value=Number(settings.firstDownbeat.toFixed(3));
+}
+function applyMetronomeSettings(settings,save=true){
+  player.configureMetronome(settings);
+  if(playbackMode==='right')previewPlayer.configureMetronome(settings);
+  if(save&&metronomeStorageKey)try{localStorage.setItem(metronomeStorageKey,JSON.stringify(player.metronomeSettings));}catch{}
+  fillMetronomeSettings();updateMetronomeView();
+}
+function readMetronomeSettings(){
+  return {bpm:Number($('metronomeBpm').value),firstDownbeat:Number($('metronomeDownbeat').value)};
+}
 function clearScoreCursor() {
   if(scoreFrame)cancelAnimationFrame(scoreFrame);
   scoreFrame=0;scorePlayhead?.remove();scorePlayhead=null;scoreAnchors=[];scoreAnchorIndex=-1;
 }
 function paintScoreCursor(seconds) {
   if(!scorePlayhead||!scoreAnchors.length)return;
-  if(!player.playing&&seconds===0){scorePlayhead.style.display='none';scoreAnchorIndex=-1;return;}
+  if(playbackMode==='track'||(!scoreTransport().playing&&seconds===0)){scorePlayhead.style.display='none';scoreAnchorIndex=-1;return;}
   const tick=seconds*scoreBpm*scorePpq/60;
   let low=0,high=scoreAnchors.length;
   while(low<high){const mid=(low+high)>>1;if(scoreAnchors[mid].tick<=tick+.01)low=mid+1;else high=mid;}
@@ -35,22 +61,24 @@ function paintScoreCursor(seconds) {
 }
 function animateScoreCursor() {
   scoreFrame=0;
-  if(!player.playing)return;
-  paintScoreCursor(Math.min(player.duration,player.ctx.currentTime-player.base));
+  if(!scoreTransport().playing||playbackMode==='track')return;
+  paintScoreCursor(scoreTransport().playbackSeconds());
   scoreFrame=requestAnimationFrame(animateScoreCursor);
 }
 function moveScoreCursor(seconds) {
   paintScoreCursor(seconds);
-  if(player.playing){if(!scoreFrame)scoreFrame=requestAnimationFrame(animateScoreCursor);}
+  if(scoreTransport().playing&&playbackMode!=='track'){if(!scoreFrame)scoreFrame=requestAnimationFrame(animateScoreCursor);}
   else if(scoreFrame){cancelAnimationFrame(scoreFrame);scoreFrame=0;}
 }
 function attachScoreCursor(osmd,version) {
   const cursor=osmd.cursor,wanted=new Set(version.notes.map(note=>note.start));
+  const attacks=new Map();
+  for(const note of version.notes)attacks.set(note.start,Math.min(attacks.get(note.start)??Infinity,note.performanceStart??note.start));
   const pageRects=new Map(),anchors=[];
   cursor.reset();cursor.show();
   for(let i=0;i<40000&&!cursor.iterator.EndReached&&anchors.length<wanted.size;i++){
     const tick=Math.max(0,Math.round(cursor.iterator.currentTimeStamp.RealValue*version.ppq*4));
-    if(wanted.has(tick)&&anchors.at(-1)?.tick!==tick){
+    if(wanted.has(tick)&&anchors.at(-1)?.notationTick!==tick){
       const page=cursor.cursorElement.parentElement;
       if(!pageRects.has(page))pageRects.set(page,page.getBoundingClientRect());
       const pageLeft=pageRects.get(page).left,xs=[];
@@ -63,7 +91,7 @@ function attachScoreCursor(osmd,version) {
       }
       xs.sort((a,b)=>a-b);
       const native=cursor.cursorElement;
-      anchors.push({tick,page,x:xs.length?xs[Math.floor(xs.length/2)]:parseFloat(native.style.left)+native.width/2,
+      anchors.push({tick:attacks.get(tick),notationTick:tick,page,x:xs.length?xs[Math.floor(xs.length/2)]:parseFloat(native.style.left)+native.width/2,
         y:parseFloat(native.style.top),height:native.height});
     }
     cursor.next();
@@ -73,13 +101,21 @@ function attachScoreCursor(osmd,version) {
   scorePlayhead=document.createElement('div');scorePlayhead.className='score-playhead';
   scoreAnchors=anchors;scoreAnchorIndex=-1;scorePpq=version.ppq;scoreBpm=version.bpm;
 }
-const player = new ScorePlayer((now,total) => {
+function playbackProgress(owner,now,total){
+  if(owner===scoreTransport()&&playbackMode!=='track'){
   $('currentTime').textContent=formatTime(now);
   $('totalTime').textContent=formatTime(total);
   $('seek').value=total ? Math.round(now/total*1000) : 0;
-  moveScoreCursor(now);
-}, () => { $('playBtn').textContent='▶'; });
-const previewPlayer = new ScorePlayer(() => {}, resetPreviewButtons);
+  moveScoreCursor(owner.playing?owner.playbackSeconds():now);
+  }
+  updateMetronomeView();
+}
+const player = new ScorePlayer((now,total)=>playbackProgress(player,now,total),()=>{$('playBtn').textContent='▶';});
+const previewPlayer = new ScorePlayer((now,total)=>playbackProgress(previewPlayer,now,total),()=>{
+  resetPreviewButtons();if(playbackMode==='track')setPlaybackMode('score');$('playBtn').textContent='▶';
+});
+metronomeView=ScoreMetronomeView.mount($('metronomeMount'),{transport:scoreTransport,info:$('metronomeInfo'),
+  enabled:()=>$('visualMetronome').checked&&playbackMode!=='track'&&!$('result').classList.contains('hidden')});
 function notice(message,type='') {
   const el=$('notice'); el.textContent=message; el.className=`notice ${type}`;
   if (!message) el.classList.add('hidden');
@@ -107,10 +143,16 @@ function selectedInstrument(track) { return state.source?.inputType==='mp3' ? 'p
 function renderSelection() {
   if (!state.source) return;
   generationMessage();
+  const vocal=state.source.inputType==='mp3'&&state.mp3Instrument==='piano'&&$('arrangementMode').value==='vocal'?
+    state.source.tracks.find(track=>track.role==='vocal_melody'):null;
+  if(vocal)state.trackIds=[vocal.id];
+  $('leadOptions').classList.toggle('hidden',state.source.inputType!=='mp3'||state.mp3Instrument!=='piano'||$('arrangementMode').value!=='vocal');
+  if(state.source.inputType==='mp3')$('arrangementMode').closest('label').classList.toggle('hidden',state.mp3Instrument!=='piano');
   for (const row of document.querySelectorAll('.track-item')) {
     const selected=state.trackIds.includes(row.dataset.id);
     row.classList.toggle('selected',selected);
     row.querySelector('input[type="checkbox"]').checked=selected;
+    row.querySelector('input[type="checkbox"]').disabled=!!vocal;
   }
   const selected=state.source.tracks.filter(t=>state.trackIds.includes(t.id));
   const kinds=[...new Set(selected.map(selectedInstrument).filter(Boolean))];
@@ -161,27 +203,38 @@ function renderTracks() {
   }
   renderSelection();
 }
+function setArrangementSettings(value={mode:'vocal'}) {
+  $('arrangementMode').value=value.mode||'legacy';
+  $('leftStyle').value=value.leftStyle||'legacy';
+}
+function getArrangementSettings(){
+  return {mode:$('arrangementMode').value,
+    ...($('arrangementMode').value==='vocal'&&$('leftStyle').value!=='legacy'?{leftStyle:$('leftStyle').value}:{})};
+}
 function showSource(source) {
-  player.stop(); previewPlayer.stop(); state.source=source; state.entry=null; state.mp3Instrument='piano';
-  scoreDisplay=null;displayedVersion=null;
+  player.stop(); previewPlayer.stop();setPlaybackMode('score');state.source=source; state.entry=null; state.mp3Instrument='piano';
+  scoreDisplay=null;displayedVersion=null;scoreData=null;notationVersion=null;scoreViewGeneration++;
   clearScoreCursor();
-  state.trackIds=source.tracks.length?[source.tracks[0].id]:[]; state.assignments={}; resetPreviewButtons();
+  const primary=source.inputType==='mp3'?source.tracks.find(track=>track.role==='vocal_melody')||source.tracks[0]:source.tracks[0];
+  state.trackIds=primary?[primary.id]:[]; state.assignments={}; resetPreviewButtons();
   $('emptyState').classList.add('hidden'); $('workspace').classList.remove('hidden'); $('result').classList.add('hidden');
   $('songTitle').value=source.title; $('pageTitle').textContent=source.title;
   $('pageSubtitle').textContent=source.inputType==='mp3' ?
     'SheetSage2 提取旋律、和弦及节拍。单旋律钢琴谱可自动编配左手；也可合并两条旋律，或生成其他乐器的练习编配。' :
     '选择轨道和难度；钢琴谱可分配左右手并添加指法。';
   $('selectionHelp').textContent=source.inputType==='mp3' ?
-    '钢琴选单旋律时按预测和弦编配左手，选双旋律时分别分配左右手；吉他、贝斯、鼓生成练习编配。' :
+    '主唱钢琴版固定使用人声旋律与和弦伴奏；也可切换双旋律改编或单旋律练习。' :
     '同乐器合并为一个声部，不同乐器组成合奏谱。';
   $('trackHelp').textContent=source.inputType==='mp3' ?
-    '可同时选择人声和器乐旋律；单条旋律也可以生成。' :
+    '主唱模式固定使用人声；切换模式可选择器乐旋律或双旋律。' :
     '每个轨道都能单独试听；未识别的轨道请手动指定乐器';
   $('tempoValue').textContent=`${source.bpm} BPM${source.inputType==='mp3'?'（记谱基准）':''}`;
   $('timeValue').textContent=source.timeSignature.join('/');
   $('exportTranscribedMidi').classList.toggle('hidden',source.inputType!=='mp3');
   $('mp3InstrumentField').classList.toggle('hidden',source.inputType!=='mp3');
   $('mp3Instrument').value=state.mp3Instrument;
+  $('arrangementFields').classList.toggle('hidden',source.inputType!=='mp3');
+  setArrangementSettings({mode:source.tracks.some(t=>t.role==='vocal_melody')?'vocal':'melody',leftStyle:'root'});
   const key=source.keyFifths;
   const keyName=(fifths,mode)=>{
     const names=mode?
@@ -216,11 +269,17 @@ function renderLibrary() {
     const button=document.createElement('button');
     button.className=`library-item ${state.entry?.id===item.id&&state.entry?.songId===item.songId?'active':''}`;
     const title=document.createElement('strong'), meta=document.createElement('span');
-    title.textContent=`${item.title} · ${levels[item.difficulty]}`;
-    meta.textContent=`${names[item.instrument]||item.instrument} · ${item.trackName}`;
+    title.textContent=item.sourceOnly?item.title:`${item.title} · ${levels[item.difficulty]}`;
+    meta.textContent=item.sourceOnly?'原始文件已保留 · 点击重新生成':`${names[item.instrument]||item.instrument} · ${item.trackName}`;
+    if(item.arrangementSettings?.mode==='vocal'&&item.arrangementSettings.leftStyle&&item.arrangementSettings.leftStyle!=='legacy'){
+      const labels={root:'简单根音',fifth:'根音/五度',voiced:'和弦连接',off:'仅右手'};
+      meta.textContent='钢琴 · 主唱 · '+labels[item.arrangementSettings.leftStyle];
+    }
+    button.title=item.title+' · '+meta.textContent;
     button.append(title,meta);
     button.disabled=busy;
     button.addEventListener('click',()=>guarded(()=>openLibrary(item)));
+    if(item.sourceOnly){row.append(button);box.append(row);continue;}
     const remove=document.createElement('button'); remove.type='button'; remove.className='library-delete';
     remove.textContent='删除'; remove.dataset.id=item.id;
     remove.setAttribute('aria-label',`删除 ${item.title} · ${levels[item.difficulty]} · ${names[item.instrument]}`);
@@ -251,10 +310,10 @@ async function confirmDeleteScore() {
   try {
     const result=await window.scoresprout.deleteVersion(item.songId,item.id);
     if (state.entry?.id===item.id && state.entry?.songId===item.songId) {
-      player.load([],120,'piano'); previewPlayer.stop(); resetPreviewButtons();
+      player.load([],120,'piano'); previewPlayer.stop();setPlaybackMode('score');resetPreviewButtons();
       clearScoreCursor();
       state.entry=null; $('playBtn').textContent='▶';
-      scoreDisplay=null;displayedVersion=null;
+      scoreDisplay=null;displayedVersion=null;scoreData=null;notationVersion=null;scoreViewGeneration++;
       $('score').replaceChildren(); $('result').classList.add('hidden');
     }
     await refreshLibrary(); $('deleteDialog').close();
@@ -266,35 +325,57 @@ async function confirmDeleteScore() {
   }
 }
 async function renderVersion(data) {
-  previewPlayer.stop(); resetPreviewButtons(); state.entry=data.entry||data;
+  previewPlayer.stop(); resetPreviewButtons();setPlaybackMode('score');state.entry=data.entry||data;
   clearScoreCursor();
-  const v=data.version; player.load(v.notes,v.bpm,v.instrument); $('playBtn').textContent='▶';
+  const v=data.version; player.load(v.notes,v.bpm,v.instrument,null,v); $('playBtn').textContent='▶';
+  metronomeStorageKey=`scoresprout-metronome:${state.entry.songId||''}:${state.entry.id||''}`;
+  try{const saved=localStorage.getItem(metronomeStorageKey);if(saved){
+    player.configureMetronome(JSON.parse(saved));
+    localStorage.setItem(metronomeStorageKey,JSON.stringify(player.metronomeSettings));
+  }}
+  catch{try{localStorage.removeItem(metronomeStorageKey);}catch{}}
+  fillMetronomeSettings();
   $('result').classList.remove('hidden');
+  updateMetronomeView();
   $('resultTitle').textContent=`${v.title} · ${levels[v.difficulty]}`;
   const pianoInfo=v.pianoProcessing;
-  const handLabel={pm2s:'PM2S 左右手','mp3-roles':'人声/器乐左右手','mp3-arrangement':'右手旋律 + 左手自动编配','existing-hands':'保留原有左右手','pitch-short':'短曲按音高分手','pitch-fallback':'按音高回退分手',pitch:'按音高分谱'};
+  const handLabel={pm2s:'PM2S 左右手','mp3-roles':'保留旋律声部','mp3-arrangement':'右手旋律 + 左手自动编配','existing-hands':'保留原有左右手','pitch-short':'短曲按音高分手','pitch-fallback':'按音高回退分手',pitch:'按音高分谱'};
   const pianoDescription=pianoInfo ? ` · ${handLabel[pianoInfo.handMethod]||'左右手已分配'} · ${pianoInfo.fingeringCount?`PianoPlayer 指法 ${pianoInfo.fingeringCount} 处`:'无指法'}` : '';
   const tempoDescription=v.rhythmProcessing?`${v.bpm} BPM（按音符节拍整理，文件 ${v.rhythmProcessing.sourceBpm} BPM；试听速度保持）`:`${v.bpm} BPM`;
   $('resultDetails').textContent=`${names[v.instrument]} · ${v.trackName} · ${tempoDescription} · ${v.notes.length} 个音符${pianoDescription}${v.provenance?' · '+v.provenance:''}${pianoInfo?.warning?' · '+pianoInfo.warning:''}`;
-  $('playingInstrument').textContent=names[v.instrument];
-  const target=$('score'); target.replaceChildren();
-  scoreDisplay=null;displayedVersion=null;
-  const osmd=createScoreDisplay(target,v,{drawFingerings:$('showFingerings').checked});
-  await osmd.load(data.musicxml);
-  scoreDisplay=osmd;displayedVersion=v;redrawScore();
+  $('playingInstrument').textContent=v.instrument==='piano'?'钢琴 · Salamander 采样':names[v.instrument];
+  scoreData=data;displayedVersion=v;await renderScoreView();
   $('result').scrollIntoView({behavior:'smooth',block:'start'}); renderLibrary();
+}
+async function renderScoreView(){
+  if(!scoreData)return;
+  const generation=++scoreViewGeneration;
+  const view=scoreData.readable||scoreData;
+  const v=view.version;
+  clearScoreCursor();
+  const target=$('score'); target.replaceChildren();
+  scoreDisplay=null;notationVersion=null;
+  const osmd=createScoreDisplay(target,v,{drawFingerings:$('showFingerings').checked});
+  await osmd.load(scoreDisplayXML(view.musicxml));
+  if(generation!==scoreViewGeneration)return;
+  scoreDisplay=osmd;notationVersion=v;redrawScore();
+  const stats=view.stats;
+  $('scoreCaption').textContent=stats?`谱面已自动整理：调整 ${stats.adjusted} 处细碎时值，${stats.graceNotes} 个短倚音${stats.omittedAccompanimentFragments?'，省略 '+stats.omittedAccompanimentFragments+' 个自动伴奏碎片':''}。试听与 MIDI 保留生成音符的节奏；PDF 和 MusicXML 使用整理后的谱面。`:
+    '试听与 MIDI 保留生成音符的节奏；节拍器按当前拍号与固定基准速度计拍。';
 }
 function redrawScore() {
   if(!scoreDisplay||!displayedVersion)return;
-  const seconds=player.playing?Math.min(player.duration,player.ctx.currentTime-player.base):player.position;
+  const seconds=scoreTransport().playbackSeconds();
   clearScoreCursor();
   // setOptions only handles false in OSMD 1.9.x; set the rule both ways and
   // clear cached labels so a hidden fingering cannot survive a reflow.
   scoreDisplay.EngravingRules.RenderFingerings=$('showFingerings').checked;
-  for(const measures of scoreDisplay.GraphicSheet.MeasureList)
-    for(const measure of measures)for(const entry of measure.staffEntries)entry.FingeringEntries=[];
+  // Before the first render, OSMD can leave empty slots for staff measures.
+  for(const measures of scoreDisplay.GraphicSheet.MeasureList||[])
+    for(const measure of measures||[])for(const entry of measure?.staffEntries||[])
+      if(entry)entry.FingeringEntries=[];
   scoreDisplay.Zoom=Number($('scoreZoom').value)/100;
-  scoreDisplay.render();attachScoreCursor(scoreDisplay,displayedVersion);moveScoreCursor(seconds||0);
+  scoreDisplay.render();attachScoreCursor(scoreDisplay,notationVersion||displayedVersion);moveScoreCursor(seconds||0);
 }
 async function selectLibrarySource(item) {
   const source=await window.scoresprout.getSource(item.songId); showSource(source);
@@ -303,15 +384,18 @@ async function selectLibrarySource(item) {
   if(source.inputType==='mp3'){
     state.mp3Instrument=instruments.includes(item.instrument)?item.instrument:'piano';
     $('mp3Instrument').value=state.mp3Instrument;
+    setArrangementSettings(item.sourceOnly?{mode:source.tracks.some(track=>track.role==='vocal_melody')?'vocal':'melody',leftStyle:'root'}:
+      item.arrangementSettings||{mode:'legacy'});
   }
   if (source.inputType!=='mp3'&&!item.assignments && item.instrument && source.tracks.find(t=>t.id===item.trackId)?.detected==='unknown')
     state.assignments[item.trackId]=item.instrument;
-  renderTracks(); state.difficulty=item.difficulty;
+  renderTracks(); state.difficulty=item.difficulty||'beginner';
   document.querySelectorAll('.difficulty-option').forEach(b=>b.classList.toggle('active',b.dataset.difficulty===state.difficulty));
 }
 async function openLibrary(item) {
   if(state.generating||state.regenerating)return;
   await selectLibrarySource(item);
+  if(item.sourceOnly)return;
   const loaded=await window.scoresprout.loadVersion(item.songId,item.id); await renderVersion(loaded);
 }
 async function regenerateLibrary(item) {
@@ -362,7 +446,8 @@ async function generate() {
     state.generating=true;renderLibrary();
     $('generateBtn').disabled=true; $('generateBtn').textContent='正在生成…';
     const data=await window.scoresprout.generate(state.source.id,state.trackIds,state.difficulty,title,state.assignments,
-      state.source.inputType==='mp3'?state.mp3Instrument:null);
+      state.source.inputType==='mp3'?state.mp3Instrument:null,
+      state.source.inputType==='mp3'?getArrangementSettings():undefined);
     await window.scoresprout.renameSong(state.source.id,title);
     state.source.title=title; $('pageTitle').textContent=title;
     await refreshLibrary(); await renderVersion(data);
@@ -379,19 +464,54 @@ async function preview(id) {
   if (!state.source) throw new Error('请先导入 MIDI。');
   const track=state.source.tracks.find(t=>t.id===id); if (!track) throw new Error('轨道不存在。');
   if (previewPlayer.playing && state.previewingTrackId===id) {
-    previewPlayer.stop(); resetPreviewButtons(); return;
+    previewPlayer.stop(); resetPreviewButtons();setPlaybackMode('score');return;
   }
   previewPlayer.stop(); resetPreviewButtons(); player.pause(); $('playBtn').textContent='▶';
   const data=await window.scoresprout.previewTrack(state.source.id,id);
   const instrument=selectedInstrument(track)||'piano';
-  previewPlayer.load(data.notes.map(n=>({...n,instrument})),data.bpm,instrument);
+  previewPlayer.load(data.notes.map(n=>({...n,instrument})),data.bpm,instrument,null,state.source||{});
+  setPlaybackMode('track');
   await previewPlayer.play(); state.previewingTrackId=id;
   document.querySelectorAll('.track-preview').forEach(button=>{if(button.dataset.id===id)button.textContent='■ 停止';});
   notice(`正在试听：${track.name}${track.detected==='unknown'&&!state.assignments[id]?'（暂用钢琴音色）':''}`,'success');
 }
 function bind() {
+  $('listenRightBtn').addEventListener('click',()=>guarded(async()=>{
+    if(!displayedVersion)return;
+    if(playbackMode==='right'){
+      const position=previewPlayer.playbackSeconds(),playing=previewPlayer.playing;
+      previewPlayer.stop();setPlaybackMode('score');await player.seek(position);
+      if(playing)await player.play();$('playBtn').textContent=player.playing?'Ⅱ':'▶';return;
+    }
+    const v=displayedVersion,notes=v.notes.filter(note=>note.hand==='right');
+    if(!notes.length)throw Error('当前谱面没有已分配的右手旋律。');
+    const position=player.playbackSeconds()||0;
+    player.pause();previewPlayer.stop();
+    // Keep both clicks and visual position through trailing right-hand rests.
+    previewPlayer.load(notes,v.bpm,'piano',null,{...v,playbackEndTicks:Math.max(...v.notes.map(n=>n.start+n.duration)),metronomeSettings:player.metronomeSettings});
+    setPlaybackMode('right');previewPlayer.seek(Math.min(position,previewPlayer.duration));await previewPlayer.play();
+    $('playBtn').textContent=previewPlayer.playing?'Ⅱ':'▶';
+  }));
+  $('arrangementMode').addEventListener('change',()=>{
+    if($('arrangementMode').value==='vocal'){const vocal=state.source?.tracks.find(track=>track.role==='vocal_melody');if(vocal)state.trackIds=[vocal.id];}
+    renderSelection();
+  });
   $('scoreZoom').addEventListener('change',()=>guarded(async()=>redrawScore()));
   $('showFingerings').addEventListener('change',()=>guarded(async()=>redrawScore()));
+  $('metronome').addEventListener('change',()=>{
+    player.setMetronome($('metronome').checked);previewPlayer.setMetronome($('metronome').checked);
+  });
+  $('visualMetronome').addEventListener('change',updateMetronomeView);
+  $('metronomeStyle').addEventListener('change',()=>{$('scoreMetronome').dataset.style=$('metronomeStyle').value;});
+  $('applyMetronomeSettings').addEventListener('click',()=>guarded(()=>{
+    applyMetronomeSettings(readMetronomeSettings());notice('节拍器基准已更新。','success');
+  }));
+  $('alignMetronomeDownbeat').addEventListener('click',()=>guarded(()=>{
+    const settings=readMetronomeSettings();settings.firstDownbeat=scoreTransport().playbackSeconds();applyMetronomeSettings(settings);
+  }));
+  $('resetMetronomeSettings').addEventListener('click',()=>guarded(()=>{
+    applyMetronomeSettings({},false);if(metronomeStorageKey)try{localStorage.removeItem(metronomeStorageKey);}catch{}
+  }));
   let scoreWidth=0;
   new ResizeObserver(entries=>{
     const width=Math.round(entries[0].contentRect.width);
@@ -431,12 +551,14 @@ function bind() {
   for (const id of ['search','filterInstrument','filterDifficulty'])
     $(id).addEventListener(id==='search'?'input':'change',renderLibrary);
   $('playBtn').addEventListener('click',()=>guarded(async()=>{
-    previewPlayer.stop(); resetPreviewButtons();
-    if(player.playing) { player.pause(); $('playBtn').textContent='▶'; }
-    else { await player.play(); $('playBtn').textContent='Ⅱ'; }
+    if(playbackMode==='track'){previewPlayer.stop();setPlaybackMode('score');}resetPreviewButtons();
+    const transport=scoreTransport();
+    if(transport.playing) { transport.pause(); $('playBtn').textContent='▶'; }
+    else { const button=$('playBtn');button.disabled=true;button.textContent='…';
+      try{await transport.play();}finally{button.disabled=false;button.textContent=transport.playing?'Ⅱ':'▶';} }
   }));
-  $('stopBtn').addEventListener('click',()=>{player.stop(); $('playBtn').textContent='▶';});
-  $('seek').addEventListener('input',e=>player.seek(Number(e.target.value)/1000*(player.duration||0)));
+  $('stopBtn').addEventListener('click',()=>{player.stop();previewPlayer.stop();setPlaybackMode('score'); $('playBtn').textContent='▶';});
+  $('seek').addEventListener('input',e=>guarded(async()=>{await scoreTransport().seek(Number(e.target.value)/1000*(scoreTransport().duration||0));}));
   for(const [id,format] of [['exportMidi','mid'],['exportXml','musicxml'],['exportPdf','pdf']])
     $(id).addEventListener('click',()=>guarded(async()=>{
       if(!state.entry) return;

@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ScoreSprout</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="sources.css"><link rel="stylesheet" href="themes.css"></head>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ScoreSprout</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="sources.css"><link rel="stylesheet" href="themes.css"><link rel="stylesheet" href="vendor/metronome/view.css"></head>
 <body><div class="app">
   <aside class="sidebar">
     <div class="brand"><div class="mark">♬</div><div><strong>ScoreSprout</strong><span>让喜欢的旋律，从这里发芽</span></div></div>
@@ -19,14 +19,36 @@
         <label class="field song-field">歌曲名 <input id="songTitle" maxlength="120" placeholder="歌曲名"></label>
         <div class="meta-grid"><div><small>速度</small><strong id="tempoValue">—</strong></div><div><small>拍号</small><strong id="timeValue">—</strong></div><div><small>调号</small><strong id="keyValue">—</strong></div><div><small>轨道</small><strong id="trackCount">—</strong></div></div>
         <div class="field-label">选择轨道（可多选） <span id="trackHelp">每个轨道都能单独试听；未识别的轨道请手动指定乐器</span></div><div id="trackList" class="track-list"></div>
-        <div id="mp3InstrumentField" class="field mp3-instrument hidden"><label for="mp3Instrument">生成乐器</label><select id="mp3Instrument"><option value="piano">钢琴：单旋律配左手，双旋律分左右手</option><option value="guitar">吉他：旋律与和弦改编</option><option value="bass">贝斯：和弦根音改编</option><option value="drums">鼓：节拍基础鼓型</option></select></div>
+        <div id="mp3InstrumentField" class="field mp3-instrument hidden"><label for="mp3Instrument">生成乐器</label><select id="mp3Instrument"><option value="piano">钢琴：主唱、双旋律或单旋律练习</option><option value="guitar">吉他：旋律与和弦改编</option><option value="bass">贝斯：和弦根音改编</option><option value="drums">鼓：节拍基础鼓型</option></select></div>
+        <div id="arrangementFields" class="hidden">
+          <div class="control-row">
+            <label class="field">钢琴模式<select id="arrangementMode"><option value="vocal">主唱钢琴版：人声旋律＋左手和弦</option><option value="dual">双旋律改编：分别交给双手</option><option value="melody">单旋律练习：只写所选旋律</option><option value="legacy" hidden>旧版自动模式</option></select></label>
+          </div>
+          <div class="control-row" id="leadOptions">
+            <label class="field">左手伴奏<select id="leftStyle"><option value="root">简单根音</option><option value="fifth">根音与五度交替（单音）</option><option value="voiced">平稳连接的和弦（新手仍为单音）</option><option value="off">不添加左手</option><option value="legacy" hidden>上一版伴奏</option></select></label>
+          </div>
+        </div>
         <div class="control-row selection-row"><strong id="selectionSummary">已选 0 个轨道</strong><span id="selectionHelp" class="muted">同乐器合并为一个声部，不同乐器组成合奏谱。</span><button id="exportTranscribedMidi" class="ghost hidden">导出转写 MIDI</button></div>
       </section>
       <section class="difficulty card"><div class="section-title"><div><span class="step">02</span><h2>选择演奏难度</h2></div></div><div class="difficulty-grid"><button data-difficulty="beginner" class="difficulty-option active"><b>新手版</b><span>钢琴保留旋律 · 右手单音 · 左手简单低音</span></button><button data-difficulty="intermediate" class="difficulty-option"><b>进阶版</b><span>钢琴保留旋律 · 少量双音 · 更丰富的左手</span></button><button data-difficulty="full" class="difficulty-option"><b>完整版</b><span>尽量保留原始音符、节奏与和弦</span></button></div><div class="generate-row"><button id="generateBtn" class="primary generate" aria-describedby="generateMessage">生成乐谱 <span>→</span></button><span id="generateMessage" class="generate-message hidden" role="alert"></span></div></section>
       <section id="result" class="result card hidden"><div class="section-title"><div><span class="step">03</span><h2 id="resultTitle">生成的乐谱</h2><p id="resultDetails" class="muted"></p></div><div class="export-actions"><button id="exportPdf" class="ghost">导出 PDF</button><button id="exportXml" class="ghost">导出 MusicXML</button><button id="exportMidi" class="ghost">导出 MIDI</button><button id="deleteScore" class="ghost danger">删除乐谱</button></div></div>
         <div class="player"><button id="playBtn" class="play-button" aria-label="播放">▶</button><button id="stopBtn" class="icon-button" aria-label="停止">■</button><span id="currentTime">0:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="播放进度"><span id="totalTime">0:00</span><span id="playingInstrument" class="sound-label"></span></div>
-        <div class="score-tools"><label>谱面大小 <select id="scoreZoom" aria-label="谱面大小"><option value="85">85%</option><option value="100" selected>100%</option><option value="115">115%</option><option value="130">130%</option></select></label><label><input id="showFingerings" type="checkbox" checked> 显示指法</label></div>
-        <div class="score-shell"><div id="score"></div></div><p class="score-caption">谱面、试听与导出的 MIDI 使用同一份生成音符。</p>
+        <div class="score-tools"><button id="listenRightBtn" class="ghost" type="button">单独听右手旋律</button><label><input id="metronome" type="checkbox"> 节拍器声音</label><label><input id="visualMetronome" type="checkbox" checked> 可视节拍</label><label>谱面大小 <select id="scoreZoom" aria-label="谱面大小"><option value="85">85%</option><option value="100" selected>100%</option><option value="115">115%</option><option value="130">130%</option></select></label><label><input id="showFingerings" type="checkbox" checked> 显示指法</label></div>
+        <section id="scoreMetronome" class="score-metronome" data-style="dots" aria-label="跟随谱面播放的可视节拍器">
+          <div class="score-metronome-head"><span id="metronomeInfo" class="score-metronome-info"></span><label>显示方式 <select id="metronomeStyle"><option value="dots">彩色拍点</option><option value="columns">跳球 / 柱形</option></select></label></div>
+          <div id="metronomeMount"></div>
+          <div class="score-metronome-legend"><span><i class="strong"></i>强拍</span><span><i class="secondary"></i>次强拍</span><span><i class="weak"></i>弱拍</span></div>
+          <details class="metronome-calibration"><summary>节拍校准</summary>
+            <div class="calibration-fields">
+              <label>速度 <span id="metronomeUnit">♩</span> = <input id="metronomeBpm" type="number" min="10" max="600" step="0.1" aria-label="节拍器基准 BPM"></label>
+              <label title="首个完整小节强拍的时间">首拍（秒）<input id="metronomeDownbeat" type="number" min="0" step="0.001" aria-label="首个完整小节强拍的时间"></label>
+              <button id="alignMetronomeDownbeat" class="ghost" type="button">当前位置设为首拍</button>
+              <button id="applyMetronomeSettings" class="ghost" type="button" title="只校准节拍器，试听保留原来的节奏">应用</button>
+              <button id="resetMetronomeSettings" class="ghost" type="button">恢复默认</button>
+            </div>
+          </details>
+        </section>
+        <div class="score-shell"><div id="score"></div></div><p id="scoreCaption" class="score-caption"></p>
       </section>
     </div>
   </main>
@@ -38,4 +60,4 @@
   <p id="deleteError" class="delete-error" role="alert"></p>
   <div class="dialog-actions"><button id="cancelDelete" class="ghost" autofocus>取消</button><button id="confirmDelete" class="ghost danger">删除此版本</button></div>
 </dialog>
-<script src="../node_modules/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js"></script><script src="notation.js"></script><script src="audio.js"></script><script src="transcribe.js"></script><script src="renderer.js"></script></body></html>
+<script src="../node_modules/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js"></script><script src="notation.js"></script><script src="vendor/metronome/view.js"></script><script src="audio.js"></script><script src="transcribe.js"></script><script src="renderer.js"></script></body></html>
